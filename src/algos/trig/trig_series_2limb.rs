@@ -735,7 +735,7 @@ pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
             return Some(<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
         if raw == -one_bits {
-            return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+            return Some(-<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {

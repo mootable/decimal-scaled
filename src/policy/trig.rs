@@ -1032,21 +1032,18 @@ mod borrow_d57 {
     use crate::types::widths::wide_trig_d57;
 
     #[inline]
-    fn narrow<const SCALE: u32>(raw_wide: Int<3>, method: &'static str) -> Int<2> {
+    /// `None` when the D57-width result does not fit D38 storage — the
+    /// verdict the D38 `checked_` surface reports. `method` is gone with the
+    /// panic that used it.
+    fn narrow<const SCALE: u32>(raw_wide: Int<3>) -> Option<Int<2>> {
         let wide = crate::D::<crate::int::types::Int<3>, SCALE>::from_bits(raw_wide);
-        let narrowed: crate::D<crate::int::types::Int<2>, SCALE> =
-            wide.try_into().unwrap_or_else(|_| {
-                panic!(
-                    "{method}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
-                    38_i32 - SCALE as i32,
-                )
-            });
-        narrowed.0
+        let narrowed: crate::D<crate::int::types::Int<2>, SCALE> = wide.try_into().ok()?;
+        Some(narrowed.0)
     }
 
     #[inline]
     #[must_use]
-    pub(crate) fn atan<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    pub(crate) fn atan<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         // This path RUNS at D57's width, so D57's atan verdict is the one
         // that applies: consult the matcher instead of re-stating a band
@@ -1075,41 +1072,32 @@ mod borrow_d57 {
             super::forward::Algorithm::Schoolbook => {
                 trig::trig_schoolbook::atan_schoolbook::<wide_trig_d57::Core, SCALE>(widened.0, mode)
             }
-        }
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE)
-        });
-        narrow::<SCALE>(raw_wide, "atan")
+        };
+        narrow::<SCALE>(raw_wide?)
     }
 
     #[inline]
     #[must_use]
-    pub(crate) fn asin<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    pub(crate) fn asin<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::inverse_tang_3limb_s18_22::asin::<SCALE>(widened.0, mode)
-                .unwrap_or_else(|| {
-                    crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
-                })
         } else {
-            widened.asin_with(mode).0
+            super::checked_asin_dispatch::<3, SCALE>(widened.0, mode)
         };
-        narrow::<SCALE>(result_raw, "asin")
+        narrow::<SCALE>(result_raw?)
     }
 
     #[inline]
     #[must_use]
-    pub(crate) fn acos<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    pub(crate) fn acos<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::inverse_tang_3limb_s18_22::acos::<SCALE>(widened.0, mode)
-                .unwrap_or_else(|| {
-                    crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE)
-                })
         } else {
-            widened.acos_with(mode).0
+            super::checked_acos_dispatch::<3, SCALE>(widened.0, mode)
         };
-        narrow::<SCALE>(result_raw, "acos")
+        narrow::<SCALE>(result_raw?)
     }
 
     #[inline]
@@ -1118,18 +1106,15 @@ mod borrow_d57 {
         y_raw: Int<2>,
         x_raw: Int<2>,
         mode: RoundingMode,
-    ) -> Int<2> {
+    ) -> Option<Int<2>> {
         let y_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(y_raw).into();
         let x_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(x_raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::inverse_tang_3limb_s18_22::atan2::<SCALE>(y_wide.0, x_wide.0, mode)
-                .unwrap_or_else(|| {
-                    crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE)
-                })
         } else {
-            y_wide.atan2_with(x_wide, mode).0
+            super::checked_atan2_dispatch::<3, SCALE>(y_wide.0, x_wide.0, mode)
         };
-        narrow::<SCALE>(result_raw, "atan2")
+        narrow::<SCALE>(result_raw?)
     }
 }
 
@@ -1156,7 +1141,7 @@ macro_rules! narrow_widen {
         #[must_use]
         fn $name<const SCALE: u32>(v: $crate::D<$crate::int::types::Int<1>, SCALE>, mode: RoundingMode) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
             let widened: $crate::D<$crate::int::types::Int<2>, SCALE> = v.into();
-            let raw = trig::trig_series_2limb::$kernel::<SCALE>(widened.0, mode);
+            let raw = trig::trig_series_2limb::$kernel::<SCALE>(widened.0, mode).expect($err);
             $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
@@ -1170,7 +1155,7 @@ macro_rules! narrow_widen_binary {
         fn $name<const SCALE: u32>(y: $crate::D<$crate::int::types::Int<1>, SCALE>, x: $crate::D<$crate::int::types::Int<1>, SCALE>, mode: RoundingMode) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
             let y_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = y.into();
             let x_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = x.into();
-            let raw = trig::trig_series_2limb::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
+            let raw = trig::trig_series_2limb::$kernel::<SCALE>(y_wide.0, x_wide.0, mode).expect($err);
             $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
@@ -2263,8 +2248,8 @@ where
 #[must_use]
 pub(crate) fn checked_sin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_sin(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2285,7 +2270,7 @@ pub(crate) fn checked_sin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_sin(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_sin(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sin(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2303,8 +2288,8 @@ pub(crate) fn sin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: 
 #[must_use]
 pub(crate) fn checked_cos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_cos(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2325,7 +2310,7 @@ pub(crate) fn checked_cos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_cos(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_cos(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cos(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2343,8 +2328,8 @@ pub(crate) fn cos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: 
 #[must_use]
 pub(crate) fn checked_tan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_tan(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2365,7 +2350,7 @@ pub(crate) fn checked_tan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_tan(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_tan(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tan(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2383,8 +2368,8 @@ pub(crate) fn tan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: 
 #[must_use]
 pub(crate) fn checked_atan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atan(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2405,7 +2390,7 @@ pub(crate) fn checked_atan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atan(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atan(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2423,8 +2408,8 @@ pub(crate) fn atan_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn checked_asin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_asin(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2445,7 +2430,7 @@ pub(crate) fn checked_asin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_asin(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_asin(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asin(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2463,8 +2448,8 @@ pub(crate) fn asin_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn checked_acos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_acos(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2485,7 +2470,7 @@ pub(crate) fn checked_acos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_acos(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_acos(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acos(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2503,8 +2488,8 @@ pub(crate) fn acos_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn checked_sinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_sinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2525,7 +2510,7 @@ pub(crate) fn checked_sinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_sinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_sinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_sinh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2543,8 +2528,8 @@ pub(crate) fn sinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn checked_cosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_cosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2565,7 +2550,7 @@ pub(crate) fn checked_cosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_cosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_cosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_cosh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2583,8 +2568,8 @@ pub(crate) fn cosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn checked_tanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_tanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2605,7 +2590,7 @@ pub(crate) fn checked_tanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_tanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_tanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_tanh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2623,8 +2608,8 @@ pub(crate) fn tanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn checked_asinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_asinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2645,7 +2630,7 @@ pub(crate) fn checked_asinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_asinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_asinh(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_asinh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2663,8 +2648,8 @@ pub(crate) fn asinh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode
 #[must_use]
 pub(crate) fn checked_acosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_acosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2685,7 +2670,7 @@ pub(crate) fn checked_acosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_acosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_acosh(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_acosh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2703,8 +2688,8 @@ pub(crate) fn acosh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode
 #[must_use]
 pub(crate) fn checked_atanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2725,7 +2710,7 @@ pub(crate) fn checked_atanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atanh(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atanh(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2743,8 +2728,8 @@ pub(crate) fn atanh_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode
 #[must_use]
 pub(crate) fn checked_to_degrees_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_to_degrees(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2765,7 +2750,7 @@ pub(crate) fn checked_to_degrees_dispatch<const N: usize, const SCALE: u32>(raw:
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_to_degrees(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_to_degrees(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_degrees(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2783,8 +2768,8 @@ pub(crate) fn to_degrees_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>,
 #[must_use]
 pub(crate) fn checked_to_radians_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians(mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians(mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_to_radians(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2805,7 +2790,7 @@ pub(crate) fn checked_to_radians_dispatch<const N: usize, const SCALE: u32>(raw:
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_to_radians(mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_to_radians(mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians(mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_to_radians(mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 
@@ -2823,8 +2808,8 @@ pub(crate) fn to_radians_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>,
 #[must_use]
 pub(crate) fn checked_atan2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, other: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0),
-        2 => Some(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0.resize_to::<Int<N>>()),
+        1 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).and_then(|value| super::narrow_fit::<N>(value.0)),
+        2 => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::D::<crate::int::types::Int<3>, SCALE>(raw.resize_to::<crate::int::types::Int<3>>()).policy_atan2(crate::D::<crate::int::types::Int<3>, SCALE>(other.resize_to::<crate::int::types::Int<3>>()), mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2845,7 +2830,7 @@ pub(crate) fn checked_atan2_dispatch<const N: usize, const SCALE: u32>(raw: Int<
         48 => crate::D::<crate::int::types::Int<48>, SCALE>(raw.resize_to::<crate::int::types::Int<48>>()).policy_atan2(crate::D::<crate::int::types::Int<48>, SCALE>(other.resize_to::<crate::int::types::Int<48>>()), mode).map(|value| value.0.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::D::<crate::int::types::Int<64>, SCALE>(raw.resize_to::<crate::int::types::Int<64>>()).policy_atan2(crate::D::<crate::int::types::Int<64>, SCALE>(other.resize_to::<crate::int::types::Int<64>>()), mode).map(|value| value.0.resize_to::<Int<N>>()),
-        _ => super::narrow_fit::<N>(crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).0),
+        _ => crate::D::<crate::int::types::Int<2>, SCALE>(raw.resize_to::<crate::int::types::Int<2>>()).policy_atan2(crate::D::<crate::int::types::Int<2>, SCALE>(other.resize_to::<crate::int::types::Int<2>>()), mode).and_then(|value| super::narrow_fit::<N>(value.0)),
     }
 }
 

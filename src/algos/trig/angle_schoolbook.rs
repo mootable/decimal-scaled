@@ -82,32 +82,26 @@ pub(crate) fn to_radians_schoolbook<C: WideTrigCore, const SCALE: u32>(
 #[must_use]
 fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     to_fixed(raw)
         .mul_u128(180)
         .div(wide_pi(working_scale), working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("to_degrees", SCALE)
-        })
 }
 
 #[inline]
 #[must_use]
 fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     to_fixed(raw)
         .mul(wide_pi(working_scale), working_scale)
         .div_small(180)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("to_radians", SCALE)
-        })
 }
 
 /// Narrow schoolbook to_degrees for Int<2> storage.
@@ -116,7 +110,7 @@ fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
 pub(crate) fn to_degrees_schoolbook_narrow<const SCALE: u32>(
     raw: Int<2>,
     mode: RoundingMode,
-) -> Int<2> {
+) -> Option<Int<2>> {
     to_degrees_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
@@ -126,7 +120,7 @@ pub(crate) fn to_degrees_schoolbook_narrow<const SCALE: u32>(
 pub(crate) fn to_radians_schoolbook_narrow<const SCALE: u32>(
     raw: Int<2>,
     mode: RoundingMode,
-) -> Int<2> {
+) -> Option<Int<2>> {
     to_radians_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 

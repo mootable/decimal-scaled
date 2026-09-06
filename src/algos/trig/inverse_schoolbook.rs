@@ -777,10 +777,10 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Optio
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return 0;
+        return Some(0);
     }
     if raw == -one_bits && crate::support::rounding::is_nearest_mode(mode) {
-        return <crate::D<Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
+        return Some(<crate::D<Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128());
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(working_scale) };
@@ -824,15 +824,15 @@ fn atan2_schoolbook_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: Roundi
 /// Narrow schoolbook asin for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn asin_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(asin_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn asin_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    asin_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook acos for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn acos_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(acos_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn acos_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    acos_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook atan2 for Int<2> storage.
@@ -842,8 +842,8 @@ pub(crate) fn atan2_schoolbook_narrow<const SCALE: u32>(
     y_raw: Int<2>,
     x_raw: Int<2>,
     mode: RoundingMode,
-) -> Int<2> {
-    Int::<2>::from_i128(atan2_schoolbook_raw::<SCALE>(y_raw.as_i128(), x_raw.as_i128(), mode))
+) -> Option<Int<2>> {
+    atan2_schoolbook_raw::<SCALE>(y_raw.as_i128(), x_raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 // -- Unit tests: each schoolbook is bit-exact against the routed kernel.

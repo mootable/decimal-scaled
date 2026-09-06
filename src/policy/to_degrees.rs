@@ -89,8 +89,8 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 #[inline]
 fn mul_pi_ratio_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
-        1 | 2 => Some(crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>()),
+        1 | 2 => crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::trig::angle_mul_pi_ratio::to_degrees_mul_pi_ratio::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -111,8 +111,8 @@ fn mul_pi_ratio_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roun
         48 => crate::algos::trig::angle_mul_pi_ratio::to_degrees_mul_pi_ratio::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::algos::trig::angle_mul_pi_ratio::to_degrees_mul_pi_ratio::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).map(|value| value.resize_to::<Int<N>>()),
-        _ => Some(crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>()),
+        _ => crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
     }
 }
 
@@ -123,8 +123,8 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
         // `to_fixed_w(x, STRICT_GUARD).mul_u128(180).div(π)`, the same
         // Schoolbook identity the wide arms evaluate and the kernel the
         // D18/D38 surface has always run.
-        1 | 2 => Some(crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>()),
+        1 | 2 => crate::algos::trig::trig_series_2limb::to_degrees::<SCALE>(
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -148,7 +148,7 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
         // Widths no tier claims. Keeps the standalone narrow Schoolbook
         // kernel routed; it evaluates the same expression as the
         // `1 | 2` arm at the same guard width.
-        _ => Some(crate::algos::trig::angle_schoolbook::to_degrees_schoolbook_narrow::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>()),
+        _ => crate::algos::trig::angle_schoolbook::to_degrees_schoolbook_narrow::<SCALE>(
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
     }
 }

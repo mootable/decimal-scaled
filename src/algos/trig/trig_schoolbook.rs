@@ -109,7 +109,7 @@ pub(crate) fn atan_schoolbook<C: WideTrigCore, const SCALE: u32>(
 #[must_use]
 fn sin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     sin_fixed(to_fixed(raw), working_scale)
@@ -134,7 +134,7 @@ fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option
 #[must_use]
 fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let (sin_value, cos_value) = sin_cos_fixed(to_fixed(raw), working_scale);
@@ -152,7 +152,7 @@ fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option
 fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     use crate::types::consts::DecimalConstants;
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     // atan(±1) = ±pi/4 -- the endpoint pin, NEAREST MODES ONLY: the baked
     // quarter-pi constant is rounded half-to-even (correct for both
@@ -163,10 +163,10 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Optio
     let one_bits: i128 = 10_i128.pow(SCALE);
     if crate::support::rounding::is_nearest_mode(mode) {
         if raw == one_bits {
-            return <crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+            return Some(<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
         if raw == -one_bits {
-            return -<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+            return Some(-<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
     }
     let working_scale = SCALE + STRICT_GUARD;

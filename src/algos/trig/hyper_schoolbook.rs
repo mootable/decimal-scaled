@@ -1137,7 +1137,7 @@ fn one_fixed(working_scale: u32) -> Fixed {
 #[must_use]
 fn sinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let working_value = to_fixed(raw);
@@ -1156,7 +1156,7 @@ fn sinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Optio
 #[must_use]
 fn cosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 10_i128.pow(SCALE);
+        return Some(10_i128.pow(SCALE));
     }
     let working_scale = SCALE + STRICT_GUARD;
     let working_value = to_fixed(raw);
@@ -1174,7 +1174,7 @@ fn cosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Optio
 #[must_use]
 fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1215,7 +1215,7 @@ fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Optio
 #[must_use]
 fn asinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1245,7 +1245,7 @@ fn asinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Opti
 fn acosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1276,7 +1276,7 @@ fn acosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Opti
 #[must_use]
 fn atanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
