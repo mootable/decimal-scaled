@@ -2697,7 +2697,7 @@ macro_rules! decl_wide_transcendental {
                 raw: $Storage,
                 base_raw: $Storage,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 let zero_raw = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 if raw <= zero_raw {
                     panic!(concat!(

@@ -252,7 +252,7 @@ fn conditioned_wide<const N: usize, Wagm: BigInt, Wexp: BigInt, const SCALE: u32
     braw: Int<N>,
     mode: RoundingMode,
     k: u32,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wagm as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,

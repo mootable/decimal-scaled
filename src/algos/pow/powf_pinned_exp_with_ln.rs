@@ -59,7 +59,9 @@ pub(crate) fn powf_pinned_exp_with_ln<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     exponent_raw: C::Storage,
     mode: RoundingMode,
-    sqrt_escape: fn(C::Storage, RoundingMode) -> Option<C::Storage>,
+    // `sqrt` is total — `√v <= max(v, 1)` always fits the storage range — so
+    // the escape hands back a plain value and cannot contribute a verdict.
+    sqrt_escape: fn(C::Storage, RoundingMode) -> C::Storage,
 ) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
@@ -113,7 +115,7 @@ where
         let two = <C::Storage as BigInt>::from_i128(2);
         let multiplier = C::storage_one(SCALE);
         if exponent_raw == multiplier / two {
-            return sqrt_escape(raw, mode);
+            return Some(sqrt_escape(raw, mode));
         }
     }
     // Large-result lift. `x^y = exp(y·ln x)` carries `~|y·ln x|·log10(e)`

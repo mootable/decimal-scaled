@@ -133,7 +133,7 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
                 mode,
                 crate::policy::sqrt::dispatch::<$k, SCALE>,
             )
-            .resize_to::<Int<N>>()
+            .map(|value| value.resize_to::<Int<N>>())
         };
     }
     match N {
