@@ -24,12 +24,38 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 #               upload the compiled criterion exes + Cargo.lock as `bbc-compiled`.
 #   bench      : matrix of (width, scale) cells from `plan`; download `bbc-compiled`,
 #               invoke the prebuilt exe directly with a `-- s<scale>` name-filter
-#               (NO recompile), upload that cell's criterion subtree.
+#               (NO recompile), upload that cell's criterion subtree. Runs the
+#               timing probe at BOTH ends of the job (below).
 #   aggregate  : needs ALL bench cells; merge every cell into one criterion tree,
 #               run summarise.py -> a worst-first (op x width x scale) regression
 #               table printed to the run summary, plus a single `bbc-aggregate`
 #               artifact (combined tree + medians .tsv + rendered .md + the run
 #               config). Publishes the medians ONLY for the full default sweep.
+#               Then probe_summary.py renders the resolution + drift readings
+#               beneath that table.
+#
+# THE TIMING PROBE — what can a runner actually resolve? summarise.py puts a
+# cell in the regression focus at `Δ% > +1 AND Δ > 10 ns`, and that second arm
+# is a FIXED ABSOLUTE floor applied across cells whose cost spans three orders
+# of magnitude. On a cell reporting ~1 ns/op it is a 1000% change, so the
+# cheapest operations are unassessable by construction: a real regression on
+# `add` is filtered out and footnoted as sitting below the measurement floor,
+# which it does not. Nobody had ever measured that floor — 10 ns was a guess.
+#
+# `bench-compare/probe/bbc_probe.rs` measures it. It is SYNTHETIC and contains
+# no crate operation, because a probe built on one of our own operations
+# measures the runner AND our code at once, and when it moves you cannot tell
+# which of the two moved. That is enforced by the build rather than promised in
+# a comment: it is compiled with `rustc` DIRECTLY — no manifest, no dependency
+# graph — so it cannot link either side of the comparison even by accident, and
+# the run's tier features cannot reach it. It runs at the START and END of every
+# bench job, because the pair is the only thing that reveals whether the runner
+# degraded WHILE the sweep ran. Readings ride inside
+# `target/criterion/_bbc_probe/`, which summarise.py's `**/new/benchmark.json`
+# glob cannot match, so the medians schema is untouched. It ANNOTATES and never
+# gates: it cannot fail a job, and it does not change the filter — what that
+# floor should become is the owner's call, and the probe produces the number
+# that call needs.
 #
 # Triggers: (1) push to `main` — publishes the fresh timing medians to the `ci-data`
 # data branch, exactly like the other producers (history / lib-perf / golden); (2)
@@ -413,6 +439,40 @@ jobs:
           echo "--- compiled compare exes ---"
           ls -1 target/release/deps/compare_d*-* | grep -v '\.d$' || true
 
+      # ------------------------------------------------------------
+      # The timing probe (probe/bbc_probe.rs) — how fine a difference can a
+      # bench runner actually resolve, and how far apart do two measurements of
+      # IDENTICAL work land? The regression filter carries a fixed 10 ns
+      # absolute floor that nobody has ever measured; this is what replaces the
+      # guess with a number.
+      #
+      # Compiled with `rustc` DIRECTLY: no manifest, no dependency graph, no
+      # `extern crate`. So it structurally CANNOT link `decimal-scaled` or
+      # `prod`, and the run's tier feature set cannot reach it. That is the
+      # whole point — a probe built on one of our own operations measures the
+      # runner AND our code at once, and when it moves you cannot tell which of
+      # the two moved. A synthetic reference stays comparable across every
+      # future run whatever the library does.
+      #
+      # It is compiled HERE because the bench jobs install no toolchain at all:
+      # they download this artifact and run prebuilt executables. `-C
+      # target-cpu` is deliberately NOT set, so codegen stays the generic
+      # x86-64 baseline and does not shift when the hosted runner pool changes
+      # hardware. The toolchain and flags travel next to the binary, so a
+      # ladder that moves because the COMPILER moved is attributable rather
+      # than mysterious.
+      - name: Compile the timing probe
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          mkdir -p staged
+          FLAGS="--edition 2021 -C opt-level=3 -C codegen-units=1 -C debuginfo=0"
+          # Unquoted on purpose — a fixed literal flag list that must word-split.
+          # shellcheck disable=SC2086
+          rustc $FLAGS probe/bbc_probe.rs -o staged/bbc_probe
+          echo "$(rustc -V) | rustc ${FLAGS}" > staged/probe_build.txt
+          echo "--- probe build ---"; cat staged/probe_build.txt; ls -l staged/bbc_probe
+
       - name: Stage the compiled exes + lockfile
         working-directory: bench-compare
         run: |
@@ -505,6 +565,40 @@ jobs:
           name: bbc-compiled
           path: bbc-compiled
 
+      # ── The timing probe, taken at BOTH ends of this job ──────────────
+      #
+      # WHY A PAIR AND NOT ONE READING. A single reading cannot tell a slow
+      # machine from a machine that BECAME slow. Only the pair does, and
+      # within-job drift is exactly the thing that would quietly inflate the
+      # cells measured late in a long grouped job while leaving the early ones
+      # alone.
+      #
+      # It writes into `target/criterion/_bbc_probe/`, which is deliberate on
+      # two counts. The upload below has `path: target/criterion/`, so the
+      # artifact ROOT *is* the criterion tree and `aggregate` merges it with
+      # `cp -a "$d/."` — adding a second upload path would re-root the artifact
+      # and break that merge. And `summarise.py` globs `**/new/benchmark.json`,
+      # which `_bbc_probe/*.json` cannot match, so the readings ride along
+      # without the medians schema changing at all.
+      #
+      # NEITHER STEP CAN FAIL THE JOB. The probe exits 0 on every path and a
+      # missing binary is a warning, because a probe that can red a bench cell
+      # trades a quality annotation for a data outage — and a drifted job's
+      # branch÷prod ratio is still sound, both sides having run seconds apart
+      # inside the same criterion group.
+      - name: Timing probe (start)
+        env:
+          BBC_JOB: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          if [ ! -f bbc-compiled/bbc_probe ]; then
+            echo "::warning::no bbc_probe in bbc-compiled — skipping the timing probe"
+            exit 0
+          fi
+          chmod +x bbc-compiled/bbc_probe
+          BBC_PROBE_BUILD="$(cat bbc-compiled/probe_build.txt 2>/dev/null || echo unknown)" \
+            ./bbc-compiled/bbc_probe start "$BBC_JOB" target/criterion/_bbc_probe
+
       - name: Run ${{ matrix.name }}
         env:
           # csv from `plan`. `SCALES=all` means this width's whole grid, which
@@ -560,6 +654,22 @@ jobs:
           done
           echo "--- produced groups ---"
           ls -1 target/criterion 2>/dev/null || true
+
+      # The second half of the pair. `always()` so a cell that failed part way
+      # still contributes its drift reading — a job that fell over late is
+      # precisely the one worth having an end reading for.
+      - name: Timing probe (end)
+        if: always()
+        env:
+          BBC_JOB: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          if [ ! -f bbc-compiled/bbc_probe ]; then
+            echo "::warning::no bbc_probe in bbc-compiled — skipping the timing probe"
+            exit 0
+          fi
+          BBC_PROBE_BUILD="$(cat bbc-compiled/probe_build.txt 2>/dev/null || echo unknown)" \
+            ./bbc-compiled/bbc_probe end "$BBC_JOB" target/criterion/_bbc_probe
 
       - name: Upload criterion subtree
         if: always()
@@ -704,6 +814,48 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # Bundle the combined criterion tree into the aggregate dir too.
           cp -a target/criterion aggregate/criterion
+
+      # ------------------------------------------------------------
+      # The probe readings, rendered UNDER the regression table: what this run
+      # could actually resolve, and whether any runner drifted while the sweep
+      # ran. The readings arrived inside the merged criterion tree, in a
+      # `_bbc_probe/` subdirectory summarise.py's glob cannot match — so this is
+      # additive and nothing about the medians schema changed to carry it.
+      #
+      # A SEPARATE SCRIPT, on purpose. summarise.py owns the medians, the
+      # regression table and its filter; this owns the instrument
+      # characterisation. Keeping them apart is what lets the probe be added
+      # without touching the thing being characterised.
+      #
+      # ANNOTATION, NEVER A GATE — it reports and exits 0 whatever it finds,
+      # and it does NOT change the +1% / 10 ns filter. What that floor should
+      # be is the owner's call; this produces the number that call needs.
+      - name: Timing probe -> resolution + drift
+        working-directory: bench-compare
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -euo pipefail
+          mkdir -p aggregate
+          # The probe must not be able to cost this run its DATA. Everything
+          # above has already been produced — the medians, the table, the
+          # artifact — and an annotation that reds `aggregate` would take the
+          # publish step and the run's `success` conclusion down with it, which
+          # is a strictly worse outcome than an unrendered summary section. So
+          # the script's exit status is CAPTURED rather than propagated, and the
+          # raw readings remain in `aggregate/criterion/_bbc_probe/` and in every
+          # per-cell artifact regardless of what happens here.
+          if python3 probe_summary.py \
+               --tsv aggregate/bbc_probe.tsv \
+               --md aggregate/bbc_probe.md > aggregate/bbc_probe.out 2>&1; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            # Raw log AND summary UI: a run whose summary is truncated has not
+            # lost the readings.
+            tee -a "$GITHUB_STEP_SUMMARY" < aggregate/bbc_probe.out
+          else
+            echo "::warning::probe summary failed — regression table unaffected, raw readings are in the bbc-aggregate artifact"
+            cat aggregate/bbc_probe.out
+          fi
 
       - name: Commit the timing medians to results/timing/
         # TWO conditions, and both are load-bearing:
