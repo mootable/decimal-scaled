@@ -250,8 +250,8 @@ mod tests {
                     assert_eq!(
                         crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
                             base_raw, exponent_raw, mode),
-                        D::<Int<3>, S>(base_raw)
-                            .powf_with(D::<Int<3>, S>(exponent_raw), mode).0,
+                        Some(D::<Int<3>, S>(base_raw)
+                            .powf_with(D::<Int<3>, S>(exponent_raw), mode).0),
                         "D57 pow schoolbook != routed at base={base} exp={exponent} mode={mode:?}"
                     );
                 }
@@ -283,7 +283,7 @@ mod tests {
                     assert_eq!(
                         crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
                             base_raw, exponent_raw, mode),
-                        want,
+                        Some(want),
                         "D57 {base}^{exponent} mode={mode:?}"
                     );
                 }

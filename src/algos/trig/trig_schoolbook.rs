@@ -257,7 +257,7 @@ mod tests {
         for &raw in &NARROW_TRIG_INPUTS {
             for &mode in &MODES {
                 let school = sin_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).sin_with(mode).0;
+                let routed = Some(d38(raw).sin_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "sin schoolbook != routed at raw={raw} mode={mode:?}"
@@ -271,7 +271,7 @@ mod tests {
         for &raw in &NARROW_TRIG_INPUTS {
             for &mode in &MODES {
                 let school = cos_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).cos_with(mode).0;
+                let routed = Some(d38(raw).cos_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "cos schoolbook != routed at raw={raw} mode={mode:?}"
@@ -287,7 +287,7 @@ mod tests {
         for &raw in &NARROW_TRIG_INPUTS {
             for &mode in &MODES {
                 let school = tan_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).tan_with(mode).0;
+                let routed = Some(d38(raw).tan_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "tan schoolbook != routed at raw={raw} mode={mode:?}"
@@ -347,7 +347,7 @@ mod tests {
             }
             for &mode in &MODES {
                 let school = atan_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).atan_with(mode).0;
+                let routed = Some(d38(raw).atan_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "atan schoolbook != routed at raw={raw} mode={mode:?}"
@@ -386,7 +386,7 @@ mod tests {
         ] {
             assert_eq!(
                 atan_schoolbook_narrow::<S38>(d38(one_bits).0, mode),
-                Int::<2>::from_i128(PI_OVER_4_S12),
+                Some(Int::<2>::from_i128(PI_OVER_4_S12)),
                 "atan(1) schoolbook not correctly-rounded pi/4 at mode={mode:?}"
             );
         }
@@ -404,7 +404,7 @@ mod tests {
         ] {
             assert_eq!(
                 atan_schoolbook_narrow::<S38>(d38(-one_bits).0, mode),
-                Int::<2>::from_i128(-PI_OVER_4_S12),
+                Some(Int::<2>::from_i128(-PI_OVER_4_S12)),
                 "atan(-1) schoolbook not correctly-rounded -pi/4 at mode={mode:?}"
             );
         }
@@ -441,22 +441,22 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         sin_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).sin_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).sin_with(mode).0),
                         "D57 sin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         cos_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).cos_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).cos_with(mode).0),
                         "D57 cos schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         tan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).tan_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).tan_with(mode).0),
                         "D57 tan schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         atan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).atan_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).atan_with(mode).0),
                         "D57 atan schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -491,22 +491,22 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         sin_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).sin_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).sin_with(mode).0),
                         "D307 sin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         cos_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).cos_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).cos_with(mode).0),
                         "D307 cos schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         tan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).tan_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).tan_with(mode).0),
                         "D307 tan schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         atan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).atan_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).atan_with(mode).0),
                         "D307 atan schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

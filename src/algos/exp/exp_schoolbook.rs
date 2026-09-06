@@ -238,7 +238,7 @@ mod tests {
                 for mode in MODES {
                     assert_eq!(
                         crate::algos::exp::exp_schoolbook::exp_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).exp_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).exp_with(mode).0),
                         "D57 exp schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

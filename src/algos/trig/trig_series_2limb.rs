@@ -1523,52 +1523,52 @@ mod near_tie_pins {
     fn sin_directed_tiny_x_d38_s38() {
         // a w = 75 escalation cap is below deviation
         // depth 115 and would treat the grid-exact residual as exact.
-        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Floor), 0, "sin Floor");
-        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Trunc), 0, "sin Trunc");
-        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Ceiling), 1, "sin Ceiling");
+        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Floor), Some(0), "sin Floor");
+        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Trunc), Some(0), "sin Trunc");
+        assert_eq!(sin_strict_raw::<S38>(1, RoundingMode::Ceiling), Some(1), "sin Ceiling");
         // odd-function mirror: sin(−1e-38) = −(x − x³/6) ∈ (−1 ULP, 0).
-        assert_eq!(sin_strict_raw::<S38>(-1, RoundingMode::Ceiling), 0, "sin(−x) Ceiling");
-        assert_eq!(sin_strict_raw::<S38>(-1, RoundingMode::Floor), -1, "sin(−x) Floor");
+        assert_eq!(sin_strict_raw::<S38>(-1, RoundingMode::Ceiling), Some(0), "sin(−x) Ceiling");
+        assert_eq!(sin_strict_raw::<S38>(-1, RoundingMode::Floor), Some(-1), "sin(−x) Floor");
     }
 
     #[test]
     fn cos_directed_tiny_x_d38_s38() {
         // deviation 5e-39 ULPs (depth 76.3) — below even the 75-digit cap.
-        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Floor), ONE38 - 1, "cos Floor");
-        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Trunc), ONE38 - 1, "cos Trunc");
-        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Ceiling), ONE38, "cos Ceiling");
+        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Floor), Some(ONE38 - 1), "cos Floor");
+        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Trunc), Some(ONE38 - 1), "cos Trunc");
+        assert_eq!(cos_strict_raw::<S38>(1, RoundingMode::Ceiling), Some(ONE38), "cos Ceiling");
     }
 
     #[test]
     fn tan_directed_tiny_x_d38_s38() {
-        assert_eq!(tan_strict_raw::<S38>(1, RoundingMode::Ceiling), 2, "tan Ceiling");
-        assert_eq!(tan_strict_raw::<S38>(1, RoundingMode::Floor), 1, "tan Floor");
-        assert_eq!(tan_strict_raw::<S38>(-1, RoundingMode::Floor), -2, "tan(−x) Floor");
+        assert_eq!(tan_strict_raw::<S38>(1, RoundingMode::Ceiling), Some(2), "tan Ceiling");
+        assert_eq!(tan_strict_raw::<S38>(1, RoundingMode::Floor), Some(1), "tan Floor");
+        assert_eq!(tan_strict_raw::<S38>(-1, RoundingMode::Floor), Some(-2), "tan(−x) Floor");
     }
 
     #[test]
     fn atan_directed_tiny_x_d38_s38() {
-        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Floor), 0, "atan Floor");
-        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Trunc), 0, "atan Trunc");
-        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Ceiling), 1, "atan Ceiling");
+        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Floor), Some(0), "atan Floor");
+        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Trunc), Some(0), "atan Trunc");
+        assert_eq!(atan_strict_raw::<S38>(1, RoundingMode::Ceiling), Some(1), "atan Ceiling");
     }
 
     #[test]
     fn asin_directed_tiny_x_d38_s38() {
-        assert_eq!(asin_strict_raw::<S38>(1, RoundingMode::Ceiling), 2, "asin Ceiling");
-        assert_eq!(asin_strict_raw::<S38>(1, RoundingMode::Floor), 1, "asin Floor");
+        assert_eq!(asin_strict_raw::<S38>(1, RoundingMode::Ceiling), Some(2), "asin Ceiling");
+        assert_eq!(asin_strict_raw::<S38>(1, RoundingMode::Floor), Some(1), "asin Floor");
     }
 
     #[test]
     fn asinh_directed_tiny_x_d38_s38() {
-        assert_eq!(asinh_strict_raw(1, S38, RoundingMode::Floor), 0, "asinh Floor");
-        assert_eq!(asinh_strict_raw(1, S38, RoundingMode::Ceiling), 1, "asinh Ceiling");
+        assert_eq!(asinh_strict_raw(1, S38, RoundingMode::Floor), Some(0), "asinh Floor");
+        assert_eq!(asinh_strict_raw(1, S38, RoundingMode::Ceiling), Some(1), "asinh Ceiling");
     }
 
     #[test]
     fn atanh_directed_tiny_x_d38_s38() {
-        assert_eq!(atanh_strict_raw(1, S38, RoundingMode::Ceiling), 2, "atanh Ceiling");
-        assert_eq!(atanh_strict_raw(1, S38, RoundingMode::Floor), 1, "atanh Floor");
+        assert_eq!(atanh_strict_raw(1, S38, RoundingMode::Ceiling), Some(2), "atanh Ceiling");
+        assert_eq!(atanh_strict_raw(1, S38, RoundingMode::Floor), Some(1), "atanh Floor");
     }
 
     #[test]
@@ -1577,12 +1577,12 @@ mod near_tie_pins {
         // through the ratio path.
         assert_eq!(
             atan2_strict_raw::<S38>(1, ONE38, RoundingMode::Floor),
-            0,
+            Some(0),
             "atan2 Floor"
         );
         assert_eq!(
             atan2_strict_raw::<S38>(1, ONE38, RoundingMode::Ceiling),
-            1,
+            Some(1),
             "atan2 Ceiling"
         );
     }
@@ -1591,10 +1591,10 @@ mod near_tie_pins {
     fn tan_directed_tiny_x_d18_s18() {
         // D18 (SCALE ≤ 18, widened through the same Int<2> kernels):
         // tan(1e-18) deviation 3.3e-55 is below the single shot w = 48.
-        assert_eq!(tan_strict_raw::<18>(1, RoundingMode::Ceiling), 2, "tan D18 Ceiling");
+        assert_eq!(tan_strict_raw::<18>(1, RoundingMode::Ceiling), Some(2), "tan D18 Ceiling");
         // control: sin at D18 resolved already via the 75-digit escalation
         // (deviation depth 55 ≤ 75) — must keep resolving post-fix.
-        assert_eq!(sin_strict_raw::<18>(1, RoundingMode::Floor), 0, "sin D18 Floor");
+        assert_eq!(sin_strict_raw::<18>(1, RoundingMode::Floor), Some(0), "sin D18 Floor");
     }
 
     #[test]
@@ -1610,14 +1610,14 @@ mod near_tie_pins {
         ] {
             assert_eq!(
                 cosh_strict_raw(raw, S38, mode),
-                ONE38 + 1,
+                Some(ONE38 + 1),
                 "cosh(1e-19) {what}"
             );
         }
         // the c = 3 family member: cosh(3e-19) = 1 + 4.5 ULP + tail → +5.
         assert_eq!(
             cosh_strict_raw(3 * raw, S38, RoundingMode::HalfToEven),
-            ONE38 + 5,
+            Some(ONE38 + 5),
             "cosh(3e-19) HalfToEven"
         );
     }
@@ -1634,7 +1634,7 @@ mod near_tie_pins {
         ] {
             assert_eq!(
                 cos_strict_raw::<S38>(raw, mode),
-                ONE38,
+                Some(ONE38),
                 "cos(1e-19) {what}"
             );
         }
@@ -1646,12 +1646,12 @@ mod near_tie_pins {
         let one36 = 10_i128.pow(36);
         assert_eq!(
             cos_strict_raw::<36>(10_i128.pow(18), RoundingMode::HalfTowardZero),
-            one36,
+            Some(one36),
             "cos(1e-18) s36 HalfTowardZero"
         );
         assert_eq!(
             cosh_strict_raw(10_i128.pow(18), 36, RoundingMode::HalfToEven),
-            one36 + 1,
+            Some(one36 + 1),
             "cosh(1e-18) s36 HalfToEven"
         );
     }

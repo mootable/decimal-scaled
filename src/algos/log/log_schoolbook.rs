@@ -235,8 +235,8 @@ mod tests {
                     assert_eq!(
                         crate::algos::log::log_schoolbook::log_schoolbook::<Core, S>(
                             x_storage, b_storage, mode),
-                        D::<Int<3>, S>(x_storage)
-                            .log_with(D::<Int<3>, S>(b_storage), mode).0,
+                        Some(D::<Int<3>, S>(x_storage)
+                            .log_with(D::<Int<3>, S>(b_storage), mode).0),
                         "D57 log schoolbook != routed at x={x_units} b={base_units} mode={mode:?}"
                     );
                 }

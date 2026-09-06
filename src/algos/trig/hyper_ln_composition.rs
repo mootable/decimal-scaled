@@ -357,11 +357,23 @@ mod tests {
                             m,
                         )
                     }))
-                    .ok();
+                    // `.flatten()`: the kernels report an out-of-range
+                    // result now instead of panicking, so `.ok()` alone
+                    // would nest the two. Both sides are flattened the
+                    // same way, so the comparison still asks the one
+                    // question it always asked — do the paths agree?
+                    .ok()
+                    .flatten();
                     let b = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         crate::policy::trig::extra_rung::acosh::<$Core, $S>(raw, m)
                     }))
-                    .ok();
+                    // `.flatten()`: the kernels report an out-of-range
+                    // result now instead of panicking, so `.ok()` alone
+                    // would nest the two. Both sides are flattened the
+                    // same way, so the comparison still asks the one
+                    // question it always asked — do the paths agree?
+                    .ok()
+                    .flatten();
                     $checks += 1;
                     if a != b {
                         $fails.push(std::format!(
@@ -404,11 +416,23 @@ mod tests {
                             m,
                         )
                     }))
-                    .ok();
+                    // `.flatten()`: the kernels report an out-of-range
+                    // result now instead of panicking, so `.ok()` alone
+                    // would nest the two. Both sides are flattened the
+                    // same way, so the comparison still asks the one
+                    // question it always asked — do the paths agree?
+                    .ok()
+                    .flatten();
                     let b = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         crate::policy::trig::extra_rung::atanh::<$Core, $S>(raw, m)
                     }))
-                    .ok();
+                    // `.flatten()`: the kernels report an out-of-range
+                    // result now instead of panicking, so `.ok()` alone
+                    // would nest the two. Both sides are flattened the
+                    // same way, so the comparison still asks the one
+                    // question it always asked — do the paths agree?
+                    .ok()
+                    .flatten();
                     $checks += 1;
                     if a != b {
                         $fails.push(std::format!(

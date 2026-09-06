@@ -240,7 +240,7 @@ mod tests {
                 for mode in MODES {
                     assert_eq!(
                         crate::algos::ln::ln_schoolbook::ln_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).ln_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).ln_with(mode).0),
                         "D57 ln schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

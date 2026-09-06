@@ -1435,7 +1435,7 @@ mod tests {
                     _ => grid,
                 };
                 let got = conditioned_finish::<3, W, S>(raw, braw, mode, guard, &ln_at, probe);
-                assert_eq!(got, expected, "p={p} q={q} mode={mode:?}");
+                assert_eq!(got, Some(expected), "p={p} q={q} mode={mode:?}");
             }
         }
     }
@@ -1548,7 +1548,7 @@ mod tests {
                     SCALE,
                     exponent,
                 ) {
-                    core::exact_int_at_scale(exponent, SCALE)
+                    Some(core::exact_int_at_scale(exponent, SCALE))
                 } else {
                     core::round_to_storage_directed::<core::Wagm>(core::GUARD, SCALE, mode, |guard_digits| {
                         if guard_digits == core::GUARD {

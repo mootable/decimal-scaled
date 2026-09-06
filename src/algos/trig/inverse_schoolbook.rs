@@ -896,7 +896,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     asin_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).asin_with(mode).0,
+                    Some(d38(raw).asin_with(mode).0),
                     "asin schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -920,7 +920,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     acos_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).acos_with(mode).0,
+                    Some(d38(raw).acos_with(mode).0),
                     "acos schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -939,19 +939,19 @@ mod tests {
         let half_pi = <D<Int<2>, S38> as DecimalConstants>::half_pi().0;
         let pi = <D<Int<2>, S38> as DecimalConstants>::pi().0;
         for mode in [RoundingMode::HalfToEven, RoundingMode::HalfAwayFromZero] {
-            assert_eq!(acos_schoolbook_narrow::<S38>(d38(0).0, mode), half_pi);
-            assert_eq!(acos_schoolbook_narrow::<S38>(d38(-one_bits).0, mode), pi);
+            assert_eq!(acos_schoolbook_narrow::<S38>(d38(0).0, mode), Some(half_pi));
+            assert_eq!(acos_schoolbook_narrow::<S38>(d38(-one_bits).0, mode), Some(pi));
         }
         for &mode in &MODES {
-            assert_eq!(acos_schoolbook_narrow::<S38>(d38(one_bits).0, mode), Int::<2>::from_i128(0));
+            assert_eq!(acos_schoolbook_narrow::<S38>(d38(one_bits).0, mode), Some(Int::<2>::from_i128(0)));
             assert_eq!(
                 acos_schoolbook_narrow::<S38>(d38(0).0, mode),
-                d38(0).acos_with(mode).0,
+                Some(d38(0).acos_with(mode).0),
                 "acos(0) schoolbook != routed at mode={mode:?}"
             );
             assert_eq!(
                 acos_schoolbook_narrow::<S38>(d38(-one_bits).0, mode),
-                d38(-one_bits).acos_with(mode).0,
+                Some(d38(-one_bits).acos_with(mode).0),
                 "acos(-1) schoolbook != routed at mode={mode:?}"
             );
         }
@@ -975,7 +975,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     atan2_schoolbook_narrow::<S38>(d38(y).0, d38(x).0, mode),
-                    d38(y).atan2_with(d38(x), mode).0,
+                    Some(d38(y).atan2_with(d38(x), mode).0),
                     "atan2 schoolbook != routed at y={y} x={x} mode={mode:?}"
                 );
             }
@@ -1006,17 +1006,17 @@ mod tests {
             // Tier kernel.
             assert_eq!(
                 asin_schoolbook::<Core, 180>(raw, RoundingMode::HalfToEven),
-                expect_nearest,
+                Some(expect_nearest),
                 "tier asin HalfToEven"
             );
             assert_eq!(
                 asin_schoolbook::<Core, 180>(raw, RoundingMode::Floor),
-                expect_floor,
+                Some(expect_floor),
                 "tier asin Floor"
             );
             assert_eq!(
                 asin_schoolbook::<Core, 180>(raw, RoundingMode::Ceiling),
-                expect_nearest,
+                Some(expect_nearest),
                 "tier asin Ceiling"
             );
             // Public path (policy -> rung walker -> tier fall-up).
@@ -1028,7 +1028,7 @@ mod tests {
             );
             for mode in MODES {
                 assert_eq!(
-                    value.asin_with(mode).0,
+                    Some(value.asin_with(mode).0),
                     asin_schoolbook::<Core, 180>(raw, mode),
                     "public == tier at mode {mode:?}"
                 );
@@ -1066,10 +1066,10 @@ mod tests {
         let one = <C::Storage as BigInt>::from_i128(1);
         let y = <C::Storage as BigInt>::from_i128(coeff) * pow10(S - big_k);
         let x = pow10(S); // 1.0
-        let grid_value = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
+        let grid_value = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven).expect("in-range reference value: this input is representable at this tier");
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfAwayFromZero),
-            grid_value,
+            Some(grid_value),
             "nearest modes agree S={S} k={big_k} coeff={coeff}"
         );
         let j_min = S / big_k + 1;
@@ -1091,22 +1091,22 @@ mod tests {
         };
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::Floor),
-            floor_expected,
+            Some(floor_expected),
             "Floor S={S} k={big_k} coeff={coeff} j*={j_star} exp={expanding}"
         );
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::Trunc),
-            trunc_expected,
+            Some(trunc_expected),
             "Trunc S={S} k={big_k} coeff={coeff} j*={j_star} exp={expanding}"
         );
         assert_eq!(
             atan2_schoolbook::<C, S>(y, x, RoundingMode::Ceiling),
-            ceil_expected,
+            Some(ceil_expected),
             "Ceiling S={S} k={big_k} coeff={coeff} j*={j_star} exp={expanding}"
         );
         // Single-step invariant: every directed result within ONE ULP of G.
         for mode in [RoundingMode::Floor, RoundingMode::Trunc, RoundingMode::Ceiling] {
-            let directed = atan2_schoolbook::<C, S>(y, x, mode);
+            let directed = atan2_schoolbook::<C, S>(y, x, mode).expect("in-range reference value: this input is representable at this tier");
             let delta = if directed < grid_value {
                 grid_value - directed
             } else {
@@ -1137,7 +1137,7 @@ mod tests {
         let one = <C::Storage as BigInt>::from_i128(1);
         let y = <C::Storage as BigInt>::from_i128(coeff) * pow10(S - big_k);
         let x = pow10(S);
-        let grid_value = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven);
+        let grid_value = atan2_schoolbook::<C, S>(y, x, RoundingMode::HalfToEven).expect("in-range reference value: this input is representable at this tier");
         let walker = |walk_mode: RoundingMode| {
             round_to_storage_directed_decided_g::<C::Storage, C::W>(
                 C::GUARD,
@@ -1161,7 +1161,7 @@ mod tests {
                 walker(mode),
                 "off-grid kernel==walker S={S} k={big_k} coeff={coeff} mode={mode:?}"
             );
-            let directed = atan2_schoolbook::<C, S>(y, x, mode);
+            let directed = atan2_schoolbook::<C, S>(y, x, mode).expect("in-range reference value: this input is representable at this tier");
             let delta = if directed < grid_value {
                 grid_value - directed
             } else {
@@ -1219,7 +1219,7 @@ mod tests {
                 let x_decimal = crate::D::<Int<24>, S>(x);
                 for mode in MODES {
                     assert_eq!(
-                        y_decimal.atan2_with(x_decimal, mode).0,
+                        Some(y_decimal.atan2_with(x_decimal, mode).0),
                         atan2_schoolbook::<Core, S>(y, x, mode),
                         "public==tier S={S} k={big_k} mode={mode:?}"
                     );
@@ -1234,9 +1234,9 @@ mod tests {
         fn atan2_nontiny_no_spurious_step() {
             let one_val = Int::<24>::from_i128(10).pow(461);
             let one = Int::<24>::from_i128(1);
-            let floored = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Floor);
-            let nearest = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::HalfToEven);
-            let ceiled = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Ceiling);
+            let floored = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Floor).expect("in-range reference value: this input is representable at this tier");
+            let nearest = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::HalfToEven).expect("in-range reference value: this input is representable at this tier");
+            let ceiled = atan2_schoolbook::<Core, 461>(one_val, one_val, RoundingMode::Ceiling).expect("in-range reference value: this input is representable at this tier");
             assert!(
                 floored <= nearest && nearest <= ceiled,
                 "non-tiny atan2(1,1) directed ordered"
@@ -1248,7 +1248,7 @@ mod tests {
             let operand = crate::D::<Int<24>, 461>(one_val);
             for mode in MODES {
                 assert_eq!(
-                    operand.atan2_with(operand, mode).0,
+                    Some(operand.atan2_with(operand, mode).0),
                     atan2_schoolbook::<Core, 461>(one_val, one_val, mode),
                     "non-tiny public==tier mode={mode:?}"
                 );
@@ -1324,7 +1324,7 @@ mod tests {
             let x_decimal = crate::D::<Int<48>, 923>(x);
             for mode in MODES {
                 assert_eq!(
-                    y_decimal.atan2_with(x_decimal, mode).0,
+                    Some(y_decimal.atan2_with(x_decimal, mode).0),
                     atan2_schoolbook::<Core, 923>(y, x, mode),
                     "d924 s923 public==tier mode={mode:?}"
                 );
@@ -1378,12 +1378,12 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         asin_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).asin_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).asin_with(mode).0),
                         "D57 asin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         acos_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).acos_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).acos_with(mode).0),
                         "D57 acos schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1402,7 +1402,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         atan2_schoolbook::<Core, S>(y_raw, x_raw, mode),
-                        D::<Int<3>, S>(y_raw).atan2_with(D::<Int<3>, S>(x_raw), mode).0,
+                        Some(D::<Int<3>, S>(y_raw).atan2_with(D::<Int<3>, S>(x_raw), mode).0),
                         "D57 atan2 schoolbook != routed at y={y} x={x} mode={mode:?}"
                     );
                 }

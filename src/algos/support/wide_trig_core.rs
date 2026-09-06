@@ -4156,6 +4156,7 @@ mod directed_walker_contract {
             St::MIN,
             recompute,
         )
+        .expect("in-range reference value")
         .as_i128()
     }
 
@@ -4242,6 +4243,7 @@ mod directed_walker_contract {
                     }
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(got, want, "late-visible deciding digit, mode={mode:?}");
         }
@@ -4457,6 +4459,7 @@ mod tagged_half_walker_contract {
             |g| (half_tie::<S1>(g), tail),
             |g| (half_tie::<S2>(g), tail),
         )
+        .expect("in-range reference value")
         .as_i128()
     }
 
@@ -4554,6 +4557,7 @@ mod tagged_half_walker_contract {
                     (grid::<S2>(g), Some(TailSign::Below))
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(r, expect, "a Below tag on the grid line under {mode:?}");
             assert_eq!(
@@ -4623,6 +4627,7 @@ mod tagged_half_sibling_walker_contract {
                     (probe_value(g, 5), Some(TailSign::Below))
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(r, DOWN, "a Below tag at an exact half must round down under {mode:?}");
             assert_eq!(
@@ -4655,6 +4660,7 @@ mod tagged_half_sibling_walker_contract {
                     }
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(
                 r, DOWN,
@@ -4682,6 +4688,7 @@ mod tagged_half_sibling_walker_contract {
                 St::MIN,
                 |g| (probe_value(g, 5), None),
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(r, expect, "the untagged tie-break must stand under {mode:?}");
         }
