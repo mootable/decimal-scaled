@@ -110,10 +110,20 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # SAME job, so the branch/prod ratio cancels machine speed: that column is sound
 # in every mode, and bbc remains a correct branch-vs-prod instrument. A ratio
 # taken BETWEEN cells is a different quantity. Under the default per-cell
-# fan-out those two numbers came off two different VMs, and the null
-# distribution on IDENTICAL code is p50 1.11x, p90 1.60x, p99 2.2x, max 6.8x —
-# so width monotonicity (D18 vs D38) and scale monotonicity (D18<9> vs D18<13>),
-# which are read entirely across cells, are not measurable that way.
+# fan-out those two numbers came off two different VMs, and on IDENTICAL code
+# that ratio moves by a lot — so width monotonicity (D18 vs D38) and scale
+# monotonicity (D18<9> vs D18<13>), which are read entirely across cells, are
+# not measurable that way.
+#
+# THE FIGURES FOR THAT NULL ARE DELIBERATELY NOT REPEATED HERE. They live in
+# `scripts/perf_compare.py` (`NULL_P25/P50/P90/P99`) and nowhere else, because
+# this comment previously carried a set that had ALREADY been superseded there —
+# the correction existed, this copy never got it, and it fed wrong numbers into
+# decisions for as long as it stood. A stated figure with a live copy elsewhere
+# is worse than one with none: the stale copy still looks authoritative. Read
+# the constants, and the per-run measured version in the timing-probe section of
+# the run summary (the probes re-derive this null on EVERY sweep, so it can no
+# longer silently stop being true).
 #
 # `group` chooses how cells map to jobs:
 #   cell   (default) one job per cell. Maximum fan-out, wall time = the slowest
@@ -581,8 +591,10 @@ jobs:
   # runner VM. Branch and prod for a given cell are always measured in the SAME
   # job, so the branch/prod ratio cancels machine speed and is valid in every
   # mode. A ratio taken BETWEEN cells is a different matter — in `cell` mode
-  # those two numbers came off two different VMs, and the null distribution on
-  # identical code is p50 1.11x, p90 1.60x, p99 2.2x, max 6.8x. Width and scale
+  # those two numbers came off two different VMs, and on identical code that
+  # ratio moves substantially (the null lives in `scripts/perf_compare.py`
+  # `NULL_P*`, and is re-measured every sweep by the timing probes below — it is
+  # deliberately not restated here, see the header). Width and scale
   # monotonicity are read entirely across cells, so they need `group: width` (a
   # scale grid on one machine) or `group: all` (widths too).
   bench:
@@ -863,7 +875,9 @@ jobs:
             if [ "$RUN_GROUP" = "cell" ]; then
               echo "> **Cross-cell ratios in this table are NOT valid.** Each cell ran on"
               echo "> its own runner VM, so a ratio between two cells carries the machine"
-              echo "> difference (p50 1.11x, p90 1.60x, max 6.8x on identical code). The"
+              echo "> difference — sized on identical work by the **timing probes** section"
+              echo "> at the foot of this summary, which measures it on THIS sweep rather"
+              echo "> than quoting a constant calibrated once. The"
               echo "> branch-vs-prod columns are unaffected — those two are measured in the"
               echo "> same job. For a cross-scale or cross-width reading, re-dispatch with"
               echo "> \`group: width\` or \`group: all\`."
