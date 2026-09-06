@@ -66,5 +66,20 @@ some of the spread between any two of them is the machine rather than the code.
 So each run also measures its own instrument, and publishes what it found:
 
 <!-- BEGIN GENERATED:performance:calibration -->
-_Pending the first bench-branch-compare CI run with the timing probes — this renders from `results/timing/bbc_probe.tsv`._
+| Reference cost | Repeatability (spread over repeated measurement) |
+| :-- | --: |
+| 1.86 ns | ±4.7% |
+| 6.22 ns | ±2.0% |
+| 25 ns | ±2.0% |
+| 99.7 ns | ±2.7% |
+| 398 ns | ±2.2% |
+| 1.59 µs | ±1.8% |
+| 6.38 µs | ±1.7% |
+| 25.5 µs | ±2.0% |
+
+**Two timings on these pages that differ by less than about ±5% are not distinguishable at this run's resolution.** The table above is a synthetic reference workload — arithmetic with no library code in it — measured repeatedly at each cost during the same run that produced the timings. The spread of those repeats is measurement, not code, so it is the floor under any difference read off this page.
+
+A fixed library operation — `decimal_scaled::D18<0> add` — is measured in the same runs, at 0.979 ns (±4.7%). It is held constant deliberately, so its movement across releases is a check on the library itself rather than on the machine. It is reported separately from the synthetic reference above and never combined with it: a combined figure could not tell a slower runner from slower code.
+
+The runner's clock resolves 40 ns, but that is not the floor: each timing is an average over a long loop between two clock readings, so it can be — and for the cheapest operations is — far finer than a single tick. Repeatability, not the clock, is what bounds what can be read here.
 <!-- END GENERATED:performance:calibration -->
