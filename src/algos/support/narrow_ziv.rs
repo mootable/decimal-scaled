@@ -82,7 +82,7 @@ pub(crate) fn walk(
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
-) -> i128 {
+) -> Option<i128> {
     // The shared narrowing now REPORTS an out-of-range result instead of
     // panicking inside itself. These narrow walkers keep the panic, applied
     // here: the narrow tiers already meet the `checked_` contract a different
@@ -99,8 +99,7 @@ pub(crate) fn walk(
         Int::<2>::MIN,
         recompute,
     )
-    .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("narrow ziv walk", scale))
-    .as_i128()
+    .map(|value| value.as_i128())
 }
 
 /// The `never_exact` walker — for a kernel whose true value is provably
@@ -113,7 +112,7 @@ pub(crate) fn walk_never_exact(
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
-) -> i128 {
+) -> Option<i128> {
     // Panic re-applied here — see [`walk`].
     wtc::round_to_storage_directed_never_exact_g::<Int<2>, WZiv>(
         base_guard_digits,
@@ -123,18 +122,20 @@ pub(crate) fn walk_never_exact(
         Int::<2>::MIN,
         recompute,
     )
-    .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("narrow ziv walk", scale))
-    .as_i128()
+    .map(|value| value.as_i128())
 }
 
 /// Option-contract wrapper over [`walk`] for the kernels whose overflow
-/// contract is a returned `None` (`ln`/`log`/`powf`/`exp`): the walker's
-/// range check PANICS past storage, so a near-tie AT the storage extreme
-/// (where the walker's ±1 could leave range) keeps the `single_shot`
-/// verdict instead — `single_shot` is the plain rounding of the same
-/// working value, and a tie that deep at the extreme is the
-/// Table-Maker's-Dilemma residue either way. `single_shot == None` (out of
-/// range) propagates.
+/// contract is a returned `None` (`ln`/`log`/`powf`/`exp`).
+///
+/// A near-tie AT the storage extreme (where the walker's ±1 could leave
+/// range) keeps the `single_shot` verdict instead of walking: `single_shot`
+/// is the plain rounding of the same working value, and a tie that deep at
+/// the extreme is the Table-Maker's-Dilemma residue either way. That guard
+/// originally also dodged the walker's range check, which PANICKED past
+/// storage; the walker reports now, so the guard is kept purely for the
+/// rounding reason it states, and the walker's own verdict propagates.
+/// `single_shot == None` (out of range) propagates.
 #[inline]
 pub(crate) fn walk_checked(
     single_shot: Option<i128>,
@@ -146,7 +147,7 @@ pub(crate) fn walk_checked(
     match single_shot {
         None => None,
         Some(value) if value.unsigned_abs() >= (i128::MAX as u128) - 1 => Some(value),
-        Some(_) => Some(walk(base_guard_digits, scale, mode, recompute)),
+        Some(_) => walk(base_guard_digits, scale, mode, recompute),
     }
 }
 
@@ -162,7 +163,7 @@ pub(crate) fn walk_checked_never_exact(
     match single_shot {
         None => None,
         Some(value) if value.unsigned_abs() >= (i128::MAX as u128) - 1 => Some(value),
-        Some(_) => Some(walk_never_exact(base_guard_digits, scale, mode, recompute)),
+        Some(_) => walk_never_exact(base_guard_digits, scale, mode, recompute),
     }
 }
 
@@ -175,7 +176,7 @@ pub(crate) fn walk_near_special(
     scale: u32,
     mode: RoundingMode,
     recompute: impl FnMut(u32) -> WZiv,
-) -> i128 {
+) -> Option<i128> {
     // Panic re-applied here — see [`walk`].
     wtc::round_to_storage_directed_near_special_g::<Int<2>, WZiv>(
         base_guard_digits,
@@ -185,6 +186,5 @@ pub(crate) fn walk_near_special(
         Int::<2>::MIN,
         recompute,
     )
-    .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("narrow ziv walk", scale))
-    .as_i128()
+    .map(|value| value.as_i128())
 }

@@ -736,9 +736,9 @@ fn asin_work_narrow(working_value: Fixed, working_scale: u32) -> Fixed {
 
 #[inline]
 #[must_use]
-fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(working_scale) };
@@ -754,9 +754,7 @@ fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     match asin_work_narrow(working_value, working_scale)
         .round_to_i128_clear_of_tie(working_scale, SCALE, mode)
     {
-        Some(narrowed) => narrowed.unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
-        }),
+        Some(narrowed) => narrowed,
         None => {
             crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
                 crate::algos::trig::trig_series_2limb::asin_ziv(raw, SCALE, guard_digits)
@@ -767,7 +765,7 @@ fn asin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
 
 #[inline]
 #[must_use]
-fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     use crate::types::consts::DecimalConstants;
     // Endpoint pins, matching the routed `acos_strict_raw`: acos(1) = 0
     // is EXACT (pinned for every mode); acos(0) = pi/2 and acos(-1) = pi
@@ -775,7 +773,7 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     // NEAREST modes only — directed modes fall through to the series +
     // mode-aware rounding.
     if raw == 0 && crate::support::rounding::is_nearest_mode(mode) {
-        return <crate::D<Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
+        return Some(<crate::D<Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128());
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
@@ -797,9 +795,7 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
         .sub(asin_work_narrow(working_value, working_scale))
         .round_to_i128_clear_of_tie(working_scale, SCALE, mode)
     {
-        Some(narrowed) => narrowed.unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE)
-        }),
+        Some(narrowed) => narrowed,
         None => {
             crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
                 crate::algos::trig::trig_series_2limb::acos_ziv(raw, SCALE, guard_digits)
@@ -810,15 +806,13 @@ fn acos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
 
 #[inline]
 #[must_use]
-fn atan2_schoolbook_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
+fn atan2_schoolbook_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> Option<i128> {
     let working_scale = SCALE + STRICT_GUARD;
     // Near-tie protected terminal — see `asin_schoolbook_raw`.
     match atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, working_scale)
         .round_to_i128_clear_of_tie(working_scale, SCALE, mode)
     {
-        Some(narrowed) => narrowed.unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE)
-        }),
+        Some(narrowed) => narrowed,
         None => {
             crate::algos::support::narrow_ziv::walk(STRICT_GUARD, SCALE, mode, |guard_digits| {
                 crate::algos::trig::trig_series_2limb::atan2_ziv(y_raw, x_raw, SCALE, guard_digits)
