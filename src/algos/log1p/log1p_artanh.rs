@@ -72,7 +72,7 @@ pub(crate) fn log1p_artanh_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     storage_max: St,
     storage_min: St,
     mode: RoundingMode,
-) -> St
+) -> Option<St>
 where
     S::Scratch: ComputeLimbs,
 {
@@ -91,7 +91,7 @@ where
             )
         },
     );
-    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
+    Some(super::adjust_near_zero::<St, S, SCALE>(rounded?, raw, mode))
 }
 
 /// Tier-generic entry to [`log1p_artanh_g`] — sources the work integer
@@ -105,7 +105,7 @@ where
 pub(crate) fn log1p_artanh<C: wtc::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {

@@ -65,12 +65,12 @@ pub(crate) fn pow_schoolbook<C: WideTrigCore, const SCALE: u32>(
     base: C::Storage,
     exponent: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if base <= C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     if exponent == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     // Exact integer-power pin: when the base and exponent are exact integers,
     // `base^exp` is an exact rational and its correctly-directed-rounded value
@@ -86,7 +86,7 @@ pub(crate) fn pow_schoolbook<C: WideTrigCore, const SCALE: u32>(
         C::storage_max(),
         mode,
     ) {
-        return value;
+        return Some(value);
     }
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         let working_scale = SCALE + guard_digits;
@@ -250,8 +250,8 @@ mod tests {
                     assert_eq!(
                         crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
                             base_raw, exponent_raw, mode),
-                        D::<Int<3>, S>(base_raw)
-                            .powf_with(D::<Int<3>, S>(exponent_raw), mode).0,
+                        Some(D::<Int<3>, S>(base_raw)
+                            .powf_with(D::<Int<3>, S>(exponent_raw), mode).0),
                         "D57 pow schoolbook != routed at base={base} exp={exponent} mode={mode:?}"
                     );
                 }
@@ -283,7 +283,7 @@ mod tests {
                     assert_eq!(
                         crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(
                             base_raw, exponent_raw, mode),
-                        want,
+                        Some(want),
                         "D57 {base}^{exponent} mode={mode:?}"
                     );
                 }

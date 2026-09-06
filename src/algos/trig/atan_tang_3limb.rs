@@ -166,10 +166,10 @@ fn table_entry(working_scale: u32, idx: usize, pow10_w: core::W) -> core::W {
 ///    `atan(x)`.
 #[inline]
 #[must_use]
-pub(crate) fn atan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn atan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     // atan(0) = 0 short-circuit.
     if raw == Int::<3>::ZERO {
-        return Int::<3>::ZERO;
+        return Some(Int::<3>::ZERO);
     }
 
     let working_scale = SCALE + core::GUARD;
@@ -273,8 +273,9 @@ pub(crate) fn atan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         result, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::support::wide_trig_core::atan_series::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::support::wide_trig_core::atan_series::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),

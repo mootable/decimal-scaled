@@ -60,9 +60,9 @@ const GUARD_NARROW: u32 = 8;
 /// `GUARD_NARROW`. Panics if `cos(self) == 0` (odd multiples of π/2).
 #[inline]
 #[must_use]
-pub(crate) fn tan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn tan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     if raw == Int::<3>::ZERO {
-        return Int::<3>::ZERO;
+        return Some(Int::<3>::ZERO);
     }
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
@@ -78,8 +78,9 @@ pub(crate) fn tan<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         tan_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::support::wide_trig_core::tan_series::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::support::wide_trig_core::tan_series::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),

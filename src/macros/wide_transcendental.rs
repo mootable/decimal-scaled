@@ -475,7 +475,7 @@ macro_rules! decl_wide_transcendental {
                 working_value: W,
                 working_scale: u32,
                 target: u32
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 round_to_storage_with(
                     working_value,
                     working_scale,
@@ -498,7 +498,7 @@ macro_rules! decl_wide_transcendental {
                 working_scale: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 // The narrow primitive `W` path; delegates to the work-int-
                 // generic narrowing so the wide compositions can narrow a
                 // `Wagm`-computed value to storage through the same code.
@@ -517,7 +517,7 @@ macro_rules! decl_wide_transcendental {
                 working_scale: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -559,7 +559,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -586,7 +586,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -611,7 +611,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> S,
-            ) -> $Storage
+            ) -> Option<$Storage>
             where
                 S::Scratch: $crate::int::types::compute_limbs::ComputeLimbs,
             {
@@ -2185,7 +2185,7 @@ macro_rules! decl_wide_transcendental {
                     working_scale: u32,
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_with(working_value, working_scale, target, mode)
                 }
                 #[inline]
@@ -2198,7 +2198,7 @@ macro_rules! decl_wide_transcendental {
                     working_scale: u32,
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_with_g::<Wagm>(working_value, working_scale, target, mode)
                 }
                 #[inline]
@@ -2207,7 +2207,7 @@ macro_rules! decl_wide_transcendental {
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
                     recompute: &mut dyn FnMut(u32) -> W,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_directed(base_guard_digits, target, mode, recompute)
                 }
                 #[inline]
@@ -2216,7 +2216,7 @@ macro_rules! decl_wide_transcendental {
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
                     recompute: &mut dyn FnMut(u32) -> W,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_directed_never_exact(
                         base_guard_digits,
                         target,
@@ -2326,7 +2326,7 @@ macro_rules! decl_wide_transcendental {
                     target: u32,
                     mode: $crate::support::rounding::RoundingMode,
                     recompute: &mut dyn FnMut(u32) -> W,
-                ) -> $Storage {
+                ) -> Option<$Storage> {
                     round_to_storage_directed_near_special(
                         base_guard_digits,
                         target,
@@ -2480,7 +2480,7 @@ macro_rules! decl_wide_transcendental {
                 working_value: Wagm,
                 working_scale: u32,
                 target: u32
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 round_to_storage_with_g::<Wagm>(
                     working_value,
                     working_scale,
@@ -2697,7 +2697,7 @@ macro_rules! decl_wide_transcendental {
                 raw: $Storage,
                 base_raw: $Storage,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 let zero_raw = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 if raw <= zero_raw {
                     panic!(concat!(
@@ -2771,7 +2771,7 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn log2_strict_with_kernel<const SCALE: u32>(
                 raw: $Storage,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
@@ -2786,7 +2786,7 @@ macro_rules! decl_wide_transcendental {
                     let exponent = round_to_nearest_int_agm(probe_ratio, base_working_scale);
                     let base2 = one_agm(SCALE) + one_agm(SCALE);
                     if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base2, SCALE, exponent) {
-                        return exact_int_at_scale(exponent, SCALE);
+                        return Some(exact_int_at_scale(exponent, SCALE));
                     }
                 }
                 // The walker's FIRST probe is `recompute(GUARD)`, which is
@@ -2815,7 +2815,7 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn log10_strict_with_kernel<const SCALE: u32>(
                 raw: $Storage,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
@@ -2830,7 +2830,7 @@ macro_rules! decl_wide_transcendental {
                     let exponent = round_to_nearest_int_agm(probe_ratio, base_working_scale);
                     let base10 = one_agm(SCALE + 1);
                     if log_is_exact_int::<Wagm>(to_work_scaled_agm(raw, 0), base10, SCALE, exponent) {
-                        return exact_int_at_scale(exponent, SCALE);
+                        return Some(exact_int_at_scale(exponent, SCALE));
                     }
                 }
                 // The walker's FIRST probe is `recompute(GUARD)`, which is
@@ -2862,12 +2862,12 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn exp2_strict_with_kernel<const SCALE: u32>(
                 raw: $Storage,
                 mode: $crate::support::rounding::RoundingMode,
-            ) -> $Storage {
+            ) -> Option<$Storage> {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
+                    return Some(<$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE));
                 }
                 if let ::core::option::Option::Some(pinned) = exp2_exact_pin(raw, SCALE, mode) {
-                    return pinned;
+                    return Some(pinned);
                 }
                 let k_lift = exp2_result_int_digits(raw, SCALE);
                 let base_guard_digits = GUARD + k_lift;
@@ -3037,7 +3037,16 @@ macro_rules! decl_wide_transcendental {
                     $core::to_work_scaled(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     lifted_working_scale,
                 );
-                Self::from_bits($core::round_to_storage(ln_value, lifted_working_scale, SCALE))
+                // Not policy-routed, so this shell IS the wrapper that applies
+                // the strict surface's overflow policy — see the contract in
+                // `wide_trig_core::narrow_range_checked_g`.
+                Self::from_bits(
+                    $core::round_to_storage(ln_value, lifted_working_scale, SCALE)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::ln_agm"), SCALE)
+                        }),
+                )
             }
 
             /// `e^self` via Newton's iteration on `ln_fixed_agm`.
@@ -3072,11 +3081,14 @@ macro_rules! decl_wide_transcendental {
                     $core::to_work_scaled(raw, lift),
                     lifted_working_scale
                 );
-                Self::from_bits($core::round_to_storage(
-                    exp_value,
-                    lifted_working_scale,
-                    SCALE
-                ))
+                // This shell IS the wrapper — see [`Self::ln_agm`].
+                Self::from_bits(
+                    $core::round_to_storage(exp_value, lifted_working_scale, SCALE)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::exp_agm"), SCALE)
+                        }),
+                )
             }
 
             /// Logarithm of `self` in the given `base`, as
@@ -3142,10 +3154,16 @@ macro_rules! decl_wide_transcendental {
                 // on exact powers like 2^97) and formed `x·ln2` in `Wagm`, which
                 // wraps an out-of-range result instead of panicking (the
                 // documented exp2_with vs exp2 divergence).
-                Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(
-                    self.to_bits(),
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                ))
+                Self::from_bits(
+                    $core::exp2_strict_with_kernel::<SCALE>(
+                        self.to_bits(),
+                        $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                    )
+                    .unwrap_or_else(|| {
+                        $crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($Type), "::exp2"), SCALE)
+                    }),
+                )
             }
 
             /// `self` raised to the power `exp`, as `exp(exp · ln self)`.
@@ -3352,11 +3370,17 @@ macro_rules! decl_wide_transcendental {
                 // signal cannot detect caller-side — see memory
                 // project_050_asinh_max_tang_residue). Routing it would
                 // swap the engine, so that remains an open decision.
+                // Called directly rather than through a policy, so this shell
+                // is also the wrapper applying the strict overflow policy.
                 Self::from_bits(
                     $crate::algos::trig::hyper_ln_composition::asinh_series_composition::<
                         $core::Core,
                         SCALE,
                     >(self.to_bits(), $core::GUARD, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                    .unwrap_or_else(|| {
+                        $crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($Type), "::asinh"), SCALE)
+                    }),
                 )
             }
 
@@ -3496,12 +3520,14 @@ macro_rules! decl_wide_transcendental {
                     $core::to_work_scaled(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     lifted_working_scale,
                 );
-                Self::from_bits($core::round_to_storage_with(
-                    ln_value,
-                    lifted_working_scale,
-                    SCALE,
-                    mode
-                ))
+                // This shell IS the wrapper — see [`Self::ln_agm`].
+                Self::from_bits(
+                    $core::round_to_storage_with(ln_value, lifted_working_scale, SCALE, mode)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::ln_agm_with"), SCALE)
+                        }),
+                )
             }
 
             /// Mode-aware sibling of [`Self::exp_agm`].
@@ -3524,12 +3550,14 @@ macro_rules! decl_wide_transcendental {
                     $core::to_work_scaled(raw, lift),
                     lifted_working_scale
                 );
-                Self::from_bits($core::round_to_storage_with(
-                    exp_value,
-                    lifted_working_scale,
-                    SCALE,
-                    mode
-                ))
+                // This shell IS the wrapper — see [`Self::ln_agm`].
+                Self::from_bits(
+                    $core::round_to_storage_with(exp_value, lifted_working_scale, SCALE, mode)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::exp_agm_with"), SCALE)
+                        }),
+                )
             }
 
             /// Mode-aware sibling of [`Self::log`].
@@ -3554,14 +3582,26 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self::from_bits($core::log2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
+                Self::from_bits(
+                    $core::log2_strict_with_kernel::<SCALE>(self.to_bits(), mode)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::log2_with"), SCALE)
+                        }),
+                )
             }
 
             /// Mode-aware sibling of [`Self::log10`].
             #[inline]
             #[must_use]
             pub fn log10_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self::from_bits($core::log10_strict_with_kernel::<SCALE>(self.to_bits(), mode))
+                Self::from_bits(
+                    $core::log10_strict_with_kernel::<SCALE>(self.to_bits(), mode)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::log10_with"), SCALE)
+                        }),
+                )
             }
 
             /// Mode-aware sibling of [`Self::exp`]. Delegates
@@ -3577,7 +3617,13 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp2_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
+                Self::from_bits(
+                    $core::exp2_strict_with_kernel::<SCALE>(self.to_bits(), mode)
+                        .unwrap_or_else(|| {
+                            $crate::support::diagnostics::overflow_panic_with_scale(
+                                concat!(stringify!($Type), "::exp2_with"), SCALE)
+                        }),
+                )
             }
 
             /// Mode-aware sibling of [`Self::powf`].

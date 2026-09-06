@@ -51,7 +51,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn to_degrees_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     let degrees = C::div(
@@ -68,7 +68,7 @@ pub(crate) fn to_degrees_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn to_radians_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     let radians =
@@ -80,34 +80,28 @@ pub(crate) fn to_radians_schoolbook<C: WideTrigCore, const SCALE: u32>(
 
 #[inline]
 #[must_use]
-fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn to_degrees_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     to_fixed(raw)
         .mul_u128(180)
         .div(wide_pi(working_scale), working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("to_degrees", SCALE)
-        })
 }
 
 #[inline]
 #[must_use]
-fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     to_fixed(raw)
         .mul(wide_pi(working_scale), working_scale)
         .div_small(180)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| {
-            crate::support::diagnostics::overflow_panic_with_scale("to_radians", SCALE)
-        })
 }
 
 /// Narrow schoolbook to_degrees for Int<2> storage.
@@ -116,8 +110,8 @@ fn to_radians_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) ->
 pub(crate) fn to_degrees_schoolbook_narrow<const SCALE: u32>(
     raw: Int<2>,
     mode: RoundingMode,
-) -> Int<2> {
-    Int::<2>::from_i128(to_degrees_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+) -> Option<Int<2>> {
+    to_degrees_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook to_radians for Int<2> storage.
@@ -126,8 +120,8 @@ pub(crate) fn to_degrees_schoolbook_narrow<const SCALE: u32>(
 pub(crate) fn to_radians_schoolbook_narrow<const SCALE: u32>(
     raw: Int<2>,
     mode: RoundingMode,
-) -> Int<2> {
-    Int::<2>::from_i128(to_radians_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+) -> Option<Int<2>> {
+    to_radians_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 // -- Unit tests: each schoolbook against the routed kernel on a
@@ -175,7 +169,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     to_degrees_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).to_degrees_with(mode).0,
+                    Some(d38(raw).to_degrees_with(mode).0),
                     "to_degrees schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -188,7 +182,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     to_radians_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).to_radians_with(mode).0,
+                    Some(d38(raw).to_radians_with(mode).0),
                     "to_radians schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -219,12 +213,12 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         to_degrees_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_degrees_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).to_degrees_with(mode).0),
                         "D57 to_degrees schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         to_radians_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_radians_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).to_radians_with(mode).0),
                         "D57 to_radians schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

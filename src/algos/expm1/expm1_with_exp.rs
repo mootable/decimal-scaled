@@ -125,7 +125,7 @@ pub(crate) fn expm1_with_exp_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     storage_max: St,
     storage_min: St,
     mode: RoundingMode,
-) -> St
+) -> Option<St>
 where
     S::Scratch: ComputeLimbs,
 {
@@ -145,7 +145,7 @@ where
             )
         },
     );
-    super::adjust_near_zero::<St>(rounded, raw, mode)
+    Some(super::adjust_near_zero::<St>(rounded?, raw, mode))
 }
 
 /// Tier-generic entry to [`expm1_with_exp_g`] at the tier's widest work integer
@@ -156,7 +156,7 @@ where
 pub(crate) fn expm1_with_exp<C: wtc::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
 {

@@ -7,6 +7,33 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- **`checked_` answers `None` at every tier; it no longer panics on the wide
+  ones or on D38.** Fourteen `checked_` methods carried a documented gap: the
+  out-of-range seam was threaded only on D18 (and, for the logarithms and
+  exponentials, D38), so `D38::<12>::checked_exp(big)` returned `None` while
+  `D307::<150>::checked_exp(big)` panicked. `sinh`, `cosh`, `atanh` and
+  `to_degrees` panicked from D38 upward, `tan` and `expm1` at every tier.
+
+  The overflow contract requires an operation to behave identically at every
+  width and scale, so this was a defect, not a limitation.
+
+  The wide tiers detected the condition INSIDE the kernel and expressed it as
+  a panic, where the narrow tiers decide the fit outside the kernel and
+  express it as a value. The single wide detection point now returns its
+  verdict instead of panicking, and each policy `dispatch` re-applies the
+  panic once for the strict surface — so the strict forms are unchanged.
+
+  The narrow kernels needed no new information: 31 sites had already computed
+  the range answer and were unwrapping it into a panic one line later.
+
+  The `checked_*` hop dispatchers for the trig, hyperbolic and angle families
+  go with it. They existed only because detection was a panic, and they
+  reached the matcher indirectly, through the public shell; the checked
+  surface now routes through `policy::<fn>::checked_dispatch` like every
+  other operation.
+
 ### Changed
 
 - **The `_strict` suffix is gone; the bare name carries the guarantee.**

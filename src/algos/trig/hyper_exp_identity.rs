@@ -74,7 +74,7 @@ pub(crate) fn sinh_exp_identity_with_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
@@ -92,8 +92,11 @@ where
         C::Wagm,
     >(sinh_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min())
     {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, SCALE>(raw, mode),
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => {
+            crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<C, SCALE>(raw, mode)
+        }
     }
 }
 
@@ -110,7 +113,7 @@ pub(crate) fn cosh_exp_identity_with_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
@@ -159,7 +162,7 @@ pub(crate) fn tanh_exp_identity_with_tang<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: ComputeLimbs,
@@ -172,13 +175,13 @@ where
         if abs_raw <= threshold {
             // `ZeroFiveUp`'s pivot digit; `abs_raw` is already `|raw|`.
             let raw_mod_10 = abs_raw.div_rem(<C::Storage as BigInt>::TEN).1.to_i128() as u8;
-            return crate::support::rounding::tiny_odd_compressing_directed(
+            return Some(crate::support::rounding::tiny_odd_compressing_directed(
                 raw,
                 zero,
                 <C::Storage as BigInt>::ONE,
                 raw_mod_10,
                 mode,
-            );
+            ));
         }
     }
     // General path: outside the tiny band the kernel error is far below
@@ -197,7 +200,10 @@ where
         C::Wagm,
     >(tanh_value, working_scale, SCALE, mode, C::storage_max(), C::storage_min())
     {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<C, SCALE>(raw, mode),
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => {
+            crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<C, SCALE>(raw, mode)
+        }
     }
 }

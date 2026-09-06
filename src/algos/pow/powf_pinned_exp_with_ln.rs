@@ -59,14 +59,16 @@ pub(crate) fn powf_pinned_exp_with_ln<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     exponent_raw: C::Storage,
     mode: RoundingMode,
+    // `sqrt` is total — `√v <= max(v, 1)` always fits the storage range — so
+    // the escape hands back a plain value and cannot contribute a verdict.
     sqrt_escape: fn(C::Storage, RoundingMode) -> C::Storage,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
     let storage_zero = C::storage_zero();
     if raw <= storage_zero {
-        return storage_zero;
+        return Some(storage_zero);
     }
     // Exact integer-power pin. Uses the caller's `mode`: the reciprocal
     // of a non-terminating power (e.g. `3^-2`) and a sub-resolution
@@ -85,7 +87,7 @@ where
         C::storage_max(),
         mode,
     ) {
-        return pinned;
+        return Some(pinned);
     }
     // Fractional-base integer-exponent fast path, under the caller's
     // `mode`.
@@ -93,7 +95,7 @@ where
         powi_exact::exp_as_small_int_raw::<C::Storage, SCALE>(exponent_raw)
     {
         if integer_exponent == 0 {
-            return C::storage_one(SCALE);
+            return Some(C::storage_one(SCALE));
         }
         if let Some(pinned) = powi_exact::powi_terminating_pin::<C::Storage, SCALE>(
             raw,
@@ -101,7 +103,7 @@ where
             C::storage_max(),
             mode,
         ) {
-            return pinned;
+            return Some(pinned);
         }
     }
     // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
@@ -113,7 +115,7 @@ where
         let two = <C::Storage as BigInt>::from_i128(2);
         let multiplier = C::storage_one(SCALE);
         if exponent_raw == multiplier / two {
-            return sqrt_escape(raw, mode);
+            return Some(sqrt_escape(raw, mode));
         }
     }
     // Large-result lift. `x^y = exp(y·ln x)` carries `~|y·ln x|·log10(e)`
@@ -151,6 +153,9 @@ where
         // `probe_exp_arg` is the exp argument at the base working scale;
         // narrow it to scale `SCALE` to feed the `e^|·|` digit sizer
         // (squaring-safe capped).
+        // An exp argument that does not itself fit storage used to panic
+        // right here, inside the shared narrowing; the verdict now travels
+        // out instead, and the strict wrapper re-raises it unchanged.
         let arg_at_scale = round_to_storage_with_g::<C::Storage, C::Wagm>(
             probe_exp_arg,
             base_working_scale,
@@ -158,7 +163,7 @@ where
             RoundingMode::Trunc,
             C::storage_max(),
             C::storage_min(),
-        );
+        )?;
         // `e^arg` grows integer digits ONLY for a POSITIVE argument; for
         // a negative argument `e^arg ∈ (0, 1)` has zero integer digits
         // and needs NO lift. Sizing a lift there would inflate the

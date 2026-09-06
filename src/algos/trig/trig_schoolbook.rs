@@ -47,7 +47,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn sin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::sin_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
     })
@@ -60,7 +60,7 @@ pub(crate) fn sin_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn cos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
     })
@@ -75,7 +75,7 @@ pub(crate) fn cos_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn tan_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         let working_scale = SCALE + guard_digits;
         let (sin_w, cos_w) =
@@ -95,7 +95,7 @@ pub(crate) fn tan_schoolbook<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn atan_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::atan_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
     })
@@ -107,26 +107,24 @@ pub(crate) fn atan_schoolbook<C: WideTrigCore, const SCALE: u32>(
 /// Maclaurin `Fixed` leaf [`sin_fixed`], rounded at the strict guard.
 #[inline]
 #[must_use]
-fn sin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn sin_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     sin_fixed(to_fixed(raw), working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sin", SCALE))
 }
 
 /// Narrow schoolbook `cos` core -- `cos(x)` recovered from the joint
 /// [`sin_cos_fixed`] `Fixed` leaf (shared mod-2pi reduction).
 #[inline]
 #[must_use]
-fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     let working_scale = SCALE + STRICT_GUARD;
     let (_sin_value, cos_value) = sin_cos_fixed(to_fixed(raw), working_scale);
     cos_value
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cos", SCALE))
 }
 
 /// Narrow schoolbook `tan` core -- the textbook quotient
@@ -134,9 +132,9 @@ fn cos_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
 /// leaf. Panics at the poles (cosine zero).
 #[inline]
 #[must_use]
-fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let (sin_value, cos_value) = sin_cos_fixed(to_fixed(raw), working_scale);
@@ -145,17 +143,16 @@ fn tan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     }
     sin_value.div(cos_value, working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tan", SCALE))
 }
 
 /// Narrow schoolbook `atan` core -- the arctan Maclaurin series with
 /// argument reduction supplied by the [`atan_fixed`] `Fixed` leaf.
 #[inline]
 #[must_use]
-fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     use crate::types::consts::DecimalConstants;
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     // atan(±1) = ±pi/4 -- the endpoint pin, NEAREST MODES ONLY: the baked
     // quarter-pi constant is rounded half-to-even (correct for both
@@ -166,16 +163,15 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     let one_bits: i128 = 10_i128.pow(SCALE);
     if crate::support::rounding::is_nearest_mode(mode) {
         if raw == one_bits {
-            return <crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+            return Some(<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
         if raw == -one_bits {
-            return -<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+            return Some(-<crate::D<Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128());
         }
     }
     let working_scale = SCALE + STRICT_GUARD;
     atan_fixed(to_fixed(raw), working_scale)
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE))
 }
 
 // -- `Int<2>` entry points (bridge `Int<2> -> i128`) ------------------
@@ -183,29 +179,29 @@ fn atan_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
 /// Narrow schoolbook `sin` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn sin_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(sin_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn sin_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    sin_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook `cos` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn cos_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(cos_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn cos_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    cos_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook `tan` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn tan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(tan_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn tan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    tan_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook `atan` for `Int<2>` storage.
 #[inline]
 #[must_use]
-pub(crate) fn atan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(atan_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn atan_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    atan_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 // ── Unit tests: each schoolbook is bit-exact against the routed kernel ──
@@ -261,7 +257,7 @@ mod tests {
         for &raw in &NARROW_TRIG_INPUTS {
             for &mode in &MODES {
                 let school = sin_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).sin_with(mode).0;
+                let routed = Some(d38(raw).sin_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "sin schoolbook != routed at raw={raw} mode={mode:?}"
@@ -275,7 +271,7 @@ mod tests {
         for &raw in &NARROW_TRIG_INPUTS {
             for &mode in &MODES {
                 let school = cos_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).cos_with(mode).0;
+                let routed = Some(d38(raw).cos_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "cos schoolbook != routed at raw={raw} mode={mode:?}"
@@ -291,7 +287,7 @@ mod tests {
         for &raw in &NARROW_TRIG_INPUTS {
             for &mode in &MODES {
                 let school = tan_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).tan_with(mode).0;
+                let routed = Some(d38(raw).tan_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "tan schoolbook != routed at raw={raw} mode={mode:?}"
@@ -351,7 +347,7 @@ mod tests {
             }
             for &mode in &MODES {
                 let school = atan_schoolbook_narrow::<S38>(d38(raw).0, mode);
-                let routed = d38(raw).atan_with(mode).0;
+                let routed = Some(d38(raw).atan_with(mode).0);
                 assert_eq!(
                     school, routed,
                     "atan schoolbook != routed at raw={raw} mode={mode:?}"
@@ -390,7 +386,7 @@ mod tests {
         ] {
             assert_eq!(
                 atan_schoolbook_narrow::<S38>(d38(one_bits).0, mode),
-                Int::<2>::from_i128(PI_OVER_4_S12),
+                Some(Int::<2>::from_i128(PI_OVER_4_S12)),
                 "atan(1) schoolbook not correctly-rounded pi/4 at mode={mode:?}"
             );
         }
@@ -408,7 +404,7 @@ mod tests {
         ] {
             assert_eq!(
                 atan_schoolbook_narrow::<S38>(d38(-one_bits).0, mode),
-                Int::<2>::from_i128(-PI_OVER_4_S12),
+                Some(Int::<2>::from_i128(-PI_OVER_4_S12)),
                 "atan(-1) schoolbook not correctly-rounded -pi/4 at mode={mode:?}"
             );
         }
@@ -445,22 +441,22 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         sin_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).sin_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).sin_with(mode).0),
                         "D57 sin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         cos_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).cos_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).cos_with(mode).0),
                         "D57 cos schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         tan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).tan_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).tan_with(mode).0),
                         "D57 tan schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         atan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<3>, S>(raw_value).atan_with(mode).0,
+                        Some(D::<Int<3>, S>(raw_value).atan_with(mode).0),
                         "D57 atan schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -495,22 +491,22 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         sin_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).sin_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).sin_with(mode).0),
                         "D307 sin schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         cos_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).cos_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).cos_with(mode).0),
                         "D307 cos schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         tan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).tan_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).tan_with(mode).0),
                         "D307 tan schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         atan_schoolbook::<Core, S>(raw_value, mode),
-                        D::<Int<16>, S>(raw_value).atan_with(mode).0,
+                        Some(D::<Int<16>, S>(raw_value).atan_with(mode).0),
                         "D307 atan schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

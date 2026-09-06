@@ -63,6 +63,21 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+    checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("to_radians", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`dispatch`] — see the `to_degrees`
+/// sibling. `to_radians` multiplies by `π/180 < 1`, so a representable
+/// input cannot leave the range; the seam is threaded for surface
+/// uniformity and the `None` arm is unreachable in practice.
+#[inline]
+#[must_use]
+pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
     let algo = match const { select::<N, SCALE>() } {
         Select::ByAlgorithm(algorithm) => algorithm,
         Select::ByValue(choose) => choose(&raw),
@@ -74,68 +89,68 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roun
 }
 
 #[inline]
-fn mul_pi_ratio_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+fn mul_pi_ratio_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
         1 | 2 => crate::algos::trig::trig_series_2limb::to_radians::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        3 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        6 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        8 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        32 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        48 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        64 => crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         _ => crate::algos::trig::trig_series_2limb::to_radians::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
     }
 }
 
 #[inline]
-fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
     match N {
         // The narrow realisation is `trig_series_2limb::to_radians`:
         // `to_fixed_w(x, STRICT_GUARD).mul(π).div_small(180)`, the same
         // Schoolbook identity the wide arms evaluate and the kernel the
         // D18/D38 surface has always run.
         1 | 2 => crate::algos::trig::trig_series_2limb::to_radians::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        3 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        6 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        8 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        32 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        48 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        64 => crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).map(|value| value.resize_to::<Int<N>>()),
         // Widths no tier claims. Keeps the standalone narrow Schoolbook
         // kernel routed; it evaluates the same expression as the
         // `1 | 2` arm at the same guard width.
         _ => crate::algos::trig::angle_schoolbook::to_radians_schoolbook_narrow::<SCALE>(
-            raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+            raw.resize_to::<Int<2>>(), mode).map(|value| value.resize_to::<Int<N>>()),
     }
 }

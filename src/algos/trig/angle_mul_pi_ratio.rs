@@ -27,7 +27,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     // `x * 180/π`: multiply by the exact oracle `deg_per_rad` factor
@@ -58,7 +58,7 @@ pub(crate) fn to_degrees_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn to_radians_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     let working_scale = SCALE + C::GUARD;
     let working_value = C::to_work(raw);
     // `x * π/180`: multiply by the exact oracle `rad_per_deg` factor.
@@ -109,12 +109,12 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         to_degrees_mul_pi_ratio::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_degrees_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).to_degrees_with(mode).0),
                         "D57 to_degrees MulPiRatio != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         to_radians_mul_pi_ratio::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).to_radians_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).to_radians_with(mode).0),
                         "D57 to_radians MulPiRatio != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -226,7 +226,12 @@ mod tests {
                                 raw, mode,
                             )
                         }))
-                        .ok();
+                        // `.flatten()` — see hyper_ln_composition: the
+                        // kernels report instead of panicking, and both
+                        // sides flatten alike, so the question is the
+                        // same one: do the two paths agree?
+                        .ok()
+                        .flatten();
                         let sr = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             <T>::from_bits(raw).to_radians_with(mode).to_bits()
                         }))

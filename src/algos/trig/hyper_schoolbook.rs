@@ -98,10 +98,14 @@ fn tanh_k_lift<C: WideTrigCore, const SCALE: u32>(raw: C::Storage) -> u32 {
 /// correctly). Integer compare: `|x| > (SCALE + GUARD + 2)/0.86859`.
 #[cfg(feature = "_wide-support")]
 #[inline]
+/// `Option<Option<_>>`: the OUTER layer is this pin's own "does the
+/// saturation band apply?", the INNER one the narrowing's range verdict.
+/// The two are independent, and the call site returns the inner one
+/// straight back as its own result.
 fn tanh_saturated<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> Option<C::Storage>
+) -> Option<Option<C::Storage>>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -147,7 +151,7 @@ where
 pub(crate) fn sinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -160,10 +164,10 @@ where
     };
     // sinh(0) = 0 is the SOLE exact point.
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
@@ -220,7 +224,7 @@ where
 pub(crate) fn cosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -232,7 +236,7 @@ where
         round_to_storage_widening_g, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
@@ -275,7 +279,7 @@ where
 pub(crate) fn tanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -285,10 +289,13 @@ where
     use crate::algos::exp::exp_generic as eg;
     use crate::algos::support::wide_trig_core::round_to_storage_directed_g;
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
-    if let Some(pinned) = tanh_saturated::<C, SCALE>(raw, mode) {
-        return pinned;
+    // `tanh_saturated` answers two questions at once — see its doc: the outer
+    // layer is "did the saturation band apply?", the inner one the narrowing's
+    // range verdict, which is this kernel's own result.
+    if let Some(verdict) = tanh_saturated::<C, SCALE>(raw, mode) {
+        return verdict;
     }
     let is_negative = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
@@ -342,7 +349,7 @@ where
 pub(crate) fn asinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -352,11 +359,11 @@ where
         round_to_storage_directed_decided_g, tiny_x_deep_directed_adjust, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     // asinh(x) = x − x³/6 + … : compressing (the j* = 3 linear band).
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::Wagm>(
@@ -407,6 +414,10 @@ where
     // The exact alternating-series bracket first: where it closes it PROVES
     // which side of `r` the true value lies on, superseding the `j*`-parity
     // rule whose exactness premise fails for a multi-digit significand.
+    // An out-of-range narrowing is the verdict; neither the bracket nor the
+    // deep-band adjust below moves a value more than one ULP, so neither can
+    // bring it back inside storage.
+    let rounded = rounded?;
     if let Some(bracketed) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
         C::Storage,
         C::Wagm,
@@ -417,16 +428,16 @@ where
         mode,
         crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
     ) {
-        return bracketed;
+        return Some(bracketed);
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded,
         decided,
         raw,
         mode,
         true,
         <C::Wagm as crate::int::types::traits::BigInt>::BITS,
-    )
+    ))
 }
 
 /// Schoolbook acosh for a wide tier -- ln(x + sqrt(x^2 - 1)), x >= 1.
@@ -439,7 +450,7 @@ where
 pub(crate) fn acosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -496,7 +507,7 @@ where
 pub(crate) fn atanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -519,7 +530,7 @@ where
     }
     // atanh(x) = x + x³/3 + … : expanding.
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     round_to_storage_directed_near_special_g::<C::Storage, C::Wagm>(
         C::GUARD,
@@ -599,7 +610,7 @@ where
 pub(crate) fn sinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
@@ -611,10 +622,10 @@ where
     };
     // The canonical pins — identical to the tier kernel.
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
@@ -671,7 +682,7 @@ where
 pub(crate) fn cosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as crate::int::types::traits::BigInt>::Scratch:
@@ -682,7 +693,7 @@ where
         round_to_storage_widening_g, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     let k_lift = C::exp_result_int_digits(C::to_work_scaled(raw, 0), SCALE);
     let base_guard = C::GUARD + k_lift;
@@ -726,7 +737,7 @@ where
 pub(crate) fn tanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -740,10 +751,13 @@ where
     // fast path is unreachable at the rung (the policy gate admits
     // |x| < 10, far below the onset) but kept for kernel-level callers.
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
-    if let Some(pinned) = tanh_saturated::<C, SCALE>(raw, mode) {
-        return pinned;
+    // `tanh_saturated` answers two questions at once — see its doc: the outer
+    // layer is "did the saturation band apply?", the inner one the narrowing's
+    // range verdict, which is this kernel's own result.
+    if let Some(verdict) = tanh_saturated::<C, SCALE>(raw, mode) {
+        return verdict;
     }
     let is_negative = raw < C::storage_zero();
     let base_guard = C::GUARD + tanh_k_lift::<C, SCALE>(raw);
@@ -840,7 +854,7 @@ fn ln2_at_rung<Wk: crate::int::types::traits::BigInt>(
 pub(crate) fn asinh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -851,12 +865,12 @@ where
         round_to_storage_directed_widening_decided_g, tiny_x_deep_directed_adjust, to_work_scaled_g,
     };
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     // The canonical pins — identical to the tier kernel (compressing:
     // asinh(x) = x − x³/6 + …).
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, false>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     let is_negative = raw < C::storage_zero();
     // Two-width fall-up to the tier walker width `Wagm` - the second
@@ -938,6 +952,10 @@ where
     // The exact alternating-series bracket first: where it closes it PROVES
     // which side of `r` the true value lies on, superseding the `j*`-parity
     // rule whose exactness premise fails for a multi-digit significand.
+    // An out-of-range narrowing is the verdict; neither the bracket nor the
+    // deep-band adjust below moves a value more than one ULP, so neither can
+    // bring it back inside storage.
+    let rounded = rounded?;
     if let Some(bracketed) = crate::algos::support::wide_trig_core::adjust_alternating_bracket::<
         C::Storage,
         C::Wagm,
@@ -948,16 +966,16 @@ where
         mode,
         crate::algos::support::wide_trig_core::AlternatingSeries::Asinh,
     ) {
-        return bracketed;
+        return Some(bracketed);
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded,
         decided,
         raw,
         mode,
         true,
         <C::Wagm as crate::int::types::traits::BigInt>::BITS,
-    )
+    ))
 }
 
 /// Rung-generic [`acosh_schoolbook`] — `ln(x + √(x² − 1))`, `x ≥ 1`, at
@@ -970,7 +988,7 @@ where
 pub(crate) fn acosh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -1053,7 +1071,7 @@ where
 pub(crate) fn atanh_schoolbook_g<C: WideTrigCore, Wk: crate::int::types::traits::BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wagm as crate::int::types::traits::BigInt>::Scratch:
@@ -1078,7 +1096,7 @@ where
     // The canonical pins — identical to the tier kernel (expanding:
     // atanh(x) = x + x³/3 + …).
     if let Some(pinned) = hyper_tiny_pin::<C, SCALE, true>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     // Two-width fall-up (near-special form) to the tier walker width
     // `Wagm` - see [`acosh_schoolbook_g`].
@@ -1117,9 +1135,9 @@ fn one_fixed(working_scale: u32) -> Fixed {
 
 #[inline]
 #[must_use]
-fn sinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn sinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let working_value = to_fixed(raw);
@@ -1132,14 +1150,13 @@ fn sinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     let sinh_value = if is_negative { sinh_value.neg() } else { sinh_value };
     sinh_value
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sinh", SCALE))
 }
 
 #[inline]
 #[must_use]
-fn cosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn cosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 10_i128.pow(SCALE);
+        return Some(10_i128.pow(SCALE));
     }
     let working_scale = SCALE + STRICT_GUARD;
     let working_value = to_fixed(raw);
@@ -1151,14 +1168,13 @@ fn cosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
         .add(exp_neg_x)
         .halve()
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cosh", SCALE))
 }
 
 #[inline]
 #[must_use]
-fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1193,14 +1209,13 @@ fn tanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 
     let tanh_value = if is_negative { tanh_value.neg() } else { tanh_value };
     tanh_value
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tanh", SCALE))
 }
 
 #[inline]
 #[must_use]
-fn asinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn asinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1223,15 +1238,14 @@ fn asinh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     let signed = if raw < 0 { inner.neg() } else { inner };
     signed
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asinh", SCALE))
 }
 
 #[inline]
 #[must_use]
-fn acosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn acosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1256,14 +1270,13 @@ fn acosh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     };
     inner
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("acosh", SCALE))
 }
 
 #[inline]
 #[must_use]
-fn atanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+fn atanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> Option<i128> {
     if raw == 0 {
-        return 0;
+        return Some(0);
     }
     let working_scale = SCALE + STRICT_GUARD;
     let one_w = one_fixed(working_scale);
@@ -1286,49 +1299,48 @@ fn atanh_schoolbook_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
         .sub(ln_den)
         .halve()
         .round_to_i128_with(working_scale, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atanh", SCALE))
 }
 
 /// Narrow schoolbook sinh for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn sinh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(sinh_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn sinh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    sinh_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook cosh for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn cosh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(cosh_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn cosh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    cosh_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook tanh for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn tanh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(tanh_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn tanh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    tanh_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook asinh for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn asinh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(asinh_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn asinh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    asinh_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook acosh for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn acosh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(acosh_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn acosh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    acosh_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 /// Narrow schoolbook atanh for Int<2> storage.
 #[inline]
 #[must_use]
-pub(crate) fn atanh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    Int::<2>::from_i128(atanh_schoolbook_raw::<SCALE>(raw.as_i128(), mode))
+pub(crate) fn atanh_schoolbook_narrow<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Option<Int<2>> {
+    atanh_schoolbook_raw::<SCALE>(raw.as_i128(), mode).map(Int::<2>::from_i128)
 }
 
 // -- Unit tests: each schoolbook is bit-exact against the routed kernel.
@@ -1374,7 +1386,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     sinh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).sinh_with(mode).0,
+                    Some(d38(raw).sinh_with(mode).0),
                     "sinh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1387,7 +1399,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     cosh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).cosh_with(mode).0,
+                    Some(d38(raw).cosh_with(mode).0),
                     "cosh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1400,7 +1412,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     tanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).tanh_with(mode).0,
+                    Some(d38(raw).tanh_with(mode).0),
                     "tanh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1424,7 +1436,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     tanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).tanh_with(mode).0,
+                    Some(d38(raw).tanh_with(mode).0),
                     "tanh saturation schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1449,7 +1461,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         tanh_schoolbook_narrow::<S>(Int::<2>::from_i128(raw), mode),
-                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).tanh_with(mode).0,
+                        Some(D::<Int<2>, S>(Int::<2>::from_i128(raw)).tanh_with(mode).0),
                         "tanh gap-band schoolbook != routed at raw={raw} mode={mode:?}"
                     );
                 }
@@ -1474,7 +1486,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     asinh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).asinh_with(mode).0,
+                    Some(d38(raw).asinh_with(mode).0),
                     "asinh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1494,7 +1506,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     acosh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).acosh_with(mode).0,
+                    Some(d38(raw).acosh_with(mode).0),
                     "acosh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1516,7 +1528,7 @@ mod tests {
             for &mode in &MODES {
                 assert_eq!(
                     atanh_schoolbook_narrow::<S38>(d38(raw).0, mode),
-                    d38(raw).atanh_with(mode).0,
+                    Some(d38(raw).atanh_with(mode).0),
                     "atanh schoolbook != routed at raw={raw} mode={mode:?}"
                 );
             }
@@ -1550,7 +1562,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         atanh_schoolbook_narrow::<S>(Int::<2>::from_i128(raw), mode),
-                        D::<Int<2>, S>(Int::<2>::from_i128(raw)).atanh_with(mode).0,
+                        Some(D::<Int<2>, S>(Int::<2>::from_i128(raw)).atanh_with(mode).0),
                         "atanh near-1 schoolbook != routed at raw={raw} mode={mode:?}"
                     );
                 }
@@ -1718,17 +1730,17 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         sinh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).sinh_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).sinh_with(mode).0),
                         "D57 sinh schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         cosh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).cosh_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).cosh_with(mode).0),
                         "D57 cosh schoolbook != routed at units={units} mode={mode:?}"
                     );
                     assert_eq!(
                         tanh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).tanh_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).tanh_with(mode).0),
                         "D57 tanh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1751,7 +1763,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         asinh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).asinh_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).asinh_with(mode).0),
                         "D57 asinh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1768,7 +1780,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         atanh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).atanh_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).atanh_with(mode).0),
                         "D57 atanh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1784,7 +1796,7 @@ mod tests {
                 for &mode in &MODES {
                     assert_eq!(
                         acosh_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).acosh_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).acosh_with(mode).0),
                         "D57 acosh schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }
@@ -1824,46 +1836,46 @@ mod tests {
             let zero = Int::<24>::from_i128(0);
             let one = Int::<24>::from_i128(1);
             // positive, expanding: Ceiling -> G+1, Floor/Trunc -> G.
-            let grid_value = asinh_schoolbook::<Core, S>(raw, RoundingMode::HalfToEven);
+            let grid_value = asinh_schoolbook::<Core, S>(raw, RoundingMode::HalfToEven).expect("in-range reference value: this input is representable at this tier");
             assert_eq!(
                 asinh_schoolbook::<Core, S>(raw, RoundingMode::Ceiling),
-                grid_value + one,
+                Some(grid_value + one),
                 "asinh(+) Ceiling steps up"
             );
             assert_eq!(
                 asinh_schoolbook::<Core, S>(raw, RoundingMode::Floor),
-                grid_value,
+                Some(grid_value),
                 "asinh(+) Floor stays"
             );
             assert_eq!(
                 asinh_schoolbook::<Core, S>(raw, RoundingMode::Trunc),
-                grid_value,
+                Some(grid_value),
                 "asinh(+) Trunc stays"
             );
             // negative (odd): nearest = -G; expanding -> Floor -> -G-1, Ceiling/Trunc -> -G.
             let negative_grid_value =
-                asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::HalfToEven);
+                asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::HalfToEven).expect("in-range reference value: this input is representable at this tier");
             assert_eq!(negative_grid_value, zero - grid_value, "asinh(-) nearest = -G");
             assert_eq!(
                 asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Floor),
-                negative_grid_value - one,
+                Some(negative_grid_value - one),
                 "asinh(-) Floor steps down"
             );
             assert_eq!(
                 asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Ceiling),
-                negative_grid_value,
+                Some(negative_grid_value),
                 "asinh(-) Ceiling stays"
             );
             assert_eq!(
                 asinh_schoolbook::<Core, S>(zero - raw, RoundingMode::Trunc),
-                negative_grid_value,
+                Some(negative_grid_value),
                 "asinh(-) Trunc stays"
             );
             // public path routes to the same kernel (rung == tier).
             let value = D::<Int<24>, S>(raw);
             for mode in MODES {
                 assert_eq!(
-                    value.asinh_with(mode).0,
+                    Some(value.asinh_with(mode).0),
                     asinh_schoolbook::<Core, S>(raw, mode),
                     "asinh public == tier {mode:?}"
                 );

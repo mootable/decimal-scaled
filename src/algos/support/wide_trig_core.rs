@@ -104,7 +104,7 @@ pub(crate) trait WideTrigCore {
         working_scale: u32,
         target: u32,
         mode: RoundingMode,
-    ) -> Self::Storage;
+    ) -> Option<Self::Storage>;
     /// `Wagm` storage-bridge: lift raw storage to the wide composition work
     /// integer (the `Wagm` sibling of [`Self::to_work_scaled`]).
     fn to_work_scaled_agm(raw: Self::Storage, working_digits: u32) -> Self::Wagm;
@@ -116,7 +116,7 @@ pub(crate) trait WideTrigCore {
         working_scale: u32,
         target: u32,
         mode: RoundingMode,
-    ) -> Self::Storage;
+    ) -> Option<Self::Storage>;
     /// Directed-rounding narrowing with Ziv escalation.
     /// `recompute(guard_digits)` returns the kernel value computed with
     /// that many guard digits.
@@ -125,7 +125,7 @@ pub(crate) trait WideTrigCore {
         target: u32,
         mode: RoundingMode,
         recompute: &mut dyn FnMut(u32) -> Self::W,
-    ) -> Self::Storage;
+    ) -> Option<Self::Storage>;
     /// Directed-rounding narrowing for a kernel whose true result is **never
     /// exactly representable** at the storage scale — a non-zero-argument
     /// transcendental (`exp`), irrational by Lindemann–Weierstrass and so
@@ -141,7 +141,7 @@ pub(crate) trait WideTrigCore {
         target: u32,
         mode: RoundingMode,
         recompute: &mut dyn FnMut(u32) -> Self::W,
-    ) -> Self::Storage;
+    ) -> Option<Self::Storage>;
 
     // ── the per-tier guard-digit kernels ──────────────────────────────
 
@@ -256,7 +256,7 @@ pub(crate) trait WideTrigCore {
         target: u32,
         mode: RoundingMode,
         recompute: &mut dyn FnMut(u32) -> Self::W,
-    ) -> Self::Storage;
+    ) -> Option<Self::Storage>;
 
     // ── working-scale helpers the Tang lookup kernels need ─────────────
 
@@ -391,16 +391,16 @@ fn exp_near_min_pin<C: WideTrigCore, const SCALE: u32>(
 pub(crate) fn exp_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     if let Some(pinned) = exp_near_min_pin::<C, SCALE>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     // `exp(x)` for `x != 0` is transcendental (Lindemann–Weierstrass), so its
     // true value is never exactly on a storage grid line — a zero working
@@ -462,17 +462,17 @@ where
 pub(crate) fn exp_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     if let Some(pinned) = exp_near_min_pin::<C, SCALE>(raw, mode) {
-        return pinned;
+        return Some(pinned);
     }
     round_to_storage_widening_tail_signed_g::<C::Storage, Wk, C::Wexp>(
         C::GUARD,
@@ -511,7 +511,7 @@ where
 pub(crate) fn ln_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -531,7 +531,7 @@ where
 pub(crate) fn ln_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <Wk as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -571,7 +571,7 @@ where
 pub(crate) fn sin_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -580,7 +580,7 @@ where
     // cubic deciding digit sits below the work integer's Ziv reach AND the
     // const-table provisioning, so only the analytic sign resolves it.
     if let Some(pinned) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
-        return pinned;
+        return Some(pinned);
     }
     let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
         C::GUARD,
@@ -591,6 +591,7 @@ where
         |guard_digits| C::sin_fixed::<SCALE>(
             C::to_work_scaled(raw, guard_digits), SCALE + guard_digits),
     );
+    let rounded = rounded?;
     // Deep sub-resolution band (deciding `x^{j*}`, `j* ≥ 5`): the walker is
     // mode-blind (`decided == false`); the sign is analytic (`sin` alternates).
     // The exact alternating-series bracket first: where it closes it PROVES
@@ -600,11 +601,11 @@ where
     if let Some(bracketed) = adjust_alternating_bracket::<C::Storage, C::W, SCALE>(
         rounded, raw, mode, AlternatingSeries::Sin)
     {
-        return bracketed;
+        return Some(bracketed);
     }
     let rounded = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded, decided, raw, mode, true, <C::W as BigInt>::BITS);
-    adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
+    Some(adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode))
 }
 
 /// `cos` for a wide tier — generic over the tier `C`. Standalone
@@ -615,13 +616,13 @@ where
 pub(crate) fn cos_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     let rounded = C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard_digits| {
         C::cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), SCALE + guard_digits)
-    });
+    })?;
     // [`adjust_bounded_extremum`] covers only a landing exactly ON `±10^SCALE`.
     // A landing on a DIFFERENT grid point near the extremum needs the bracket
     // to place it — the `cos(3·10⁻⁶⁴)` family, whose leading terms are exact
@@ -630,9 +631,9 @@ where
     if let Some(bracketed) = adjust_alternating_bracket::<C::Storage, C::W, SCALE>(
         rounded, raw, mode, AlternatingSeries::Cos)
     {
-        return bracketed;
+        return Some(bracketed);
     }
-    adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
+    Some(adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode))
 }
 
 /// Directed-rounding post-adjust for `sin`/`cos` near an extremum the
@@ -2127,8 +2128,10 @@ where
     adjust_log_near_zero::<St, Wt>(rounded, raw - one, one, mode)
 }
 
-/// `tan` for a wide tier — generic over the tier `C`. Panics at
-/// odd multiples of π/2 where the cosine is zero. Ports the near-pole
+/// `tan` for a wide tier — generic over the tier `C`. `None` at odd
+/// multiples of π/2 where the cosine is zero, and where the result does not
+/// fit storage; the strict surface re-raises both as its panic in the policy
+/// `dispatch` wrapper. Ports the near-pole
 /// recompute (`near_pole_tan::tan_extra_digits`, width-free). Replaces
 /// the per-tier `tan_strict_<tier>` wrappers.
 #[inline]
@@ -2136,23 +2139,29 @@ where
 pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_zero(); // tan(0) = 0, the sole exact point
+        return Some(C::storage_zero()); // tan(0) = 0, the sole exact point
     }
     // Analytic tiny-`x` directed decision (relocated from the policy layer) —
     // `tan(x) = x + x³/3 + …` EXPANDS (every Taylor coefficient is positive).
     if let Some(pinned) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
-        return pinned;
+        return Some(pinned);
     }
     let base_working_scale = SCALE + C::GUARD;
     let (sin_base, cos_base) =
         C::sin_cos_fixed::<SCALE>(C::to_work(raw), base_working_scale);
     if cos_base == C::zero() {
-        panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+        // The pole: an odd multiple of pi/2 to within the working resolution.
+        // `tan` has no value there, so this joins the out-of-range verdict on
+        // the one `None` channel — `checked_tan` documents both as `None`, and
+        // the strict form re-raises it as its own panic in the dispatch
+        // wrapper. Unlike `ln`'s `x <= 0`, this domain test is only decidable
+        // INSIDE the kernel, so it cannot be prechecked in the shell.
+        return None;
     }
     let probe = C::div(sin_base, cos_base, base_working_scale);
     let extra_digits = crate::algos::trig::near_pole_tan::tan_extra_digits(
@@ -2164,10 +2173,10 @@ where
         // rational partial on a boundary with the deciding tail deeper -
         // the asin(3e-60) family). Clear-of-band residuals keep the
         // single-shot cost; the band escalates through the walker.
-        if let Some(narrowed) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
+        if let Some(verdict) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
             probe, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
-        ) {
-            return narrowed;
+        ).settled() {
+            return verdict;
         }
         return tan_walker::<C, SCALE>(raw, C::GUARD, mode);
     }
@@ -2175,10 +2184,10 @@ where
     let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(
         C::to_work_scaled(raw, C::GUARD + extra_digits), working_scale);
     let ratio = C::div(sin_w, cos_w, working_scale);
-    if let Some(narrowed) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
+    if let Some(verdict) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
         ratio, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
-    ) {
-        return narrowed;
+    ).settled() {
+        return verdict;
     }
     tan_walker::<C, SCALE>(raw, C::GUARD + extra_digits, mode)
 }
@@ -2191,10 +2200,17 @@ fn tan_walker<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     base_guard_digits: u32,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
+    // A probe DEEPER than the single shot can newly land on the pole: its
+    // cosine is the more accurate one, so `cos == 0` there means the argument
+    // is an odd multiple of pi/2 to within that resolution. The recompute
+    // closure owes the walker an `S`, so it records the pole in this local and
+    // yields zero for that probe; the walker's result is then discarded. A
+    // plain local, not state — it lives and dies inside this call.
+    let mut pole = false;
     let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
         base_guard_digits,
         SCALE,
@@ -2206,16 +2222,21 @@ where
             let (sin_value, cos_value) =
                 C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
             if cos_value == C::zero() {
-                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+                pole = true;
+                return C::zero();
             }
             C::div(sin_value, cos_value, working_scale)
         },
     );
+    if pole {
+        return None;
+    }
+    let rounded = rounded?;
     // Deep sub-resolution tiny-`x` band (`j* ≥ 5`): `tan` always EXPANDS.
     // A near-pole tie (`|x| ≈ π/2`, not tiny) has `j*` far above `JMAX`, so
     // the adjust is a no-op there.
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        rounded, decided, raw, mode, false, <C::W as BigInt>::BITS)
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        rounded, decided, raw, mode, false, <C::W as BigInt>::BITS))
 }
 
 /// `atan` for a wide tier — generic over the tier `C`. Result in
@@ -2225,14 +2246,14 @@ where
 pub(crate) fn atan_series<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     // Analytic tiny-`x` directed decision (relocated from the policy layer) —
     // `atan` alternates like `sin` (`atan(x) = x − x³/3 + x⁵/5 − …`).
     if let Some(pinned) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
-        return pinned;
+        return Some(pinned);
     }
     let (rounded, decided) = round_to_storage_directed_decided_g::<C::Storage, C::W>(
         C::GUARD,
@@ -2243,14 +2264,15 @@ where
         |guard_digits| C::atan_fixed::<SCALE>(
             C::to_work_scaled(raw, guard_digits), SCALE + guard_digits),
     );
+    let rounded = rounded?;
     // Exact bracket first — see [`sin_series`]; `atan` alternates identically.
     if let Some(bracketed) = adjust_alternating_bracket::<C::Storage, C::W, SCALE>(
         rounded, raw, mode, AlternatingSeries::Atan)
     {
-        return bracketed;
+        return Some(bracketed);
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        rounded, decided, raw, mode, true, <C::W as BigInt>::BITS)
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        rounded, decided, raw, mode, true, <C::W as BigInt>::BITS))
 }
 
 /// Narrow-`GUARD` single-shot `atan` for a wide tier — generic
@@ -2265,7 +2287,7 @@ where
 pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     // Ziv-escalated narrowing from the band guard (NOT a single shot):
     // `atan(x) = x - x^3/3 + ...` lands an exact rational partial on a
     // rounding boundary with the deciding tail below the band's fixed
@@ -2298,19 +2320,19 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
 pub(crate) fn sin_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
     // [`sin_series`] carries (relocated from the policy layer), so this
     // rung-dispatched path and the bare tier kernel agree.
     if let Some(pinned) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
-        return pinned;
+        return Some(pinned);
     }
     // Two-width fall-up: an unresolved-at-rung-cap near-tie reruns the
     // walker at the tier work width `C::W` (the recompute closure is the
@@ -2333,6 +2355,7 @@ where
         |guard_digits| C::sin_fixed::<SCALE>(
             C::to_work_scaled(raw, guard_digits), SCALE + guard_digits),
     );
+    let rounded = rounded?;
     // The exact alternating-series bracket first: where it closes it PROVES
     // which side of `rounded` the true value lies on, superseding the
     // `j*`-parity rule whose exactness premise fails for a multi-digit
@@ -2340,11 +2363,11 @@ where
     if let Some(bracketed) = adjust_alternating_bracket::<C::Storage, C::W, SCALE>(
         rounded, raw, mode, AlternatingSeries::Sin)
     {
-        return bracketed;
+        return Some(bracketed);
     }
     let rounded = tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
         rounded, decided, raw, mode, true, <C::W as BigInt>::BITS);
-    adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
+    Some(adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode))
 }
 
 /// Rung-generic `cos` — see [`sin_series_g`]. Standalone
@@ -2355,13 +2378,13 @@ where
 pub(crate) fn cos_series_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     // Two-width fall-up — see [`sin_series_g`].
     let rounded = round_to_storage_directed_widening_g::<C::Storage, Wk, C::W>(
@@ -2380,15 +2403,15 @@ where
         },
         |guard_digits| C::cos_fixed::<SCALE>(
             C::to_work_scaled(raw, guard_digits), SCALE + guard_digits),
-    );
+    )?;
     // See [`cos_series`] — the near-extremum grid point the bounded-extremum
     // guard cannot reach.
     if let Some(bracketed) = adjust_alternating_bracket::<C::Storage, C::W, SCALE>(
         rounded, raw, mode, AlternatingSeries::Cos)
     {
-        return bracketed;
+        return Some(bracketed);
     }
-    adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
+    Some(adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode))
 }
 
 /// Rung-generic `tan` — see [`sin_series_g`]. One kernel covers
@@ -2421,7 +2444,7 @@ pub(crate) fn tan_series_g<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -2429,12 +2452,12 @@ where
     use crate::algos::exp::exp_generic as eg;
 
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
     // [`tan_series`] carries (relocated from the policy layer).
     if let Some(pinned) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, true) {
-        return pinned;
+        return Some(pinned);
     }
     let base_working_scale = SCALE + GUARD;
     let (sin_base, cos_base) = crate::algos::trig::trig_generic::sin_cos_fixed::<Wk>(
@@ -2443,17 +2466,19 @@ where
         pi_at_rung::<Wk>(base_working_scale, base_working_scale),
     );
     if cos_base == eg::zero::<Wk>() {
-        panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+        // The pole — see [`tan_series`]: one `None` channel for the
+        // kernel-decidable domain wall and the range verdict alike.
+        return None;
     }
     let probe = eg::div::<Wk>(sin_base, cos_base, base_working_scale);
     if !NEAR_POLE {
         // Near-tie escape — see [`tan_series`]: clear-of-band residuals
         // keep the single-shot cost; the band escalates (rung first,
         // tier fall-up).
-        if let Some(narrowed) = round_to_storage_clear_of_tie_g::<C::Storage, Wk>(
+        if let Some(verdict) = round_to_storage_clear_of_tie_g::<C::Storage, Wk>(
             probe, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
-        ) {
-            return narrowed;
+        ).settled() {
+            return verdict;
         }
         return tan_walker_rung_g::<C, Wk, SCALE>(raw, GUARD, mode);
     }
@@ -2461,10 +2486,10 @@ where
         eg::bit_length::<Wk>(probe), base_working_scale);
     let extra_digits = if SUB_GUARD { extra_raw.saturating_sub(GUARD) } else { extra_raw };
     if extra_digits == 0 {
-        if let Some(narrowed) = round_to_storage_clear_of_tie_g::<C::Storage, Wk>(
+        if let Some(verdict) = round_to_storage_clear_of_tie_g::<C::Storage, Wk>(
             probe, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
-        ) {
-            return narrowed;
+        ).settled() {
+            return verdict;
         }
         return tan_walker_rung_g::<C, Wk, SCALE>(raw, GUARD, mode);
     }
@@ -2481,10 +2506,10 @@ where
         ),
     );
     let ratio = eg::div::<C::W>(sin_w, cos_w, working_scale);
-    if let Some(narrowed) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
+    if let Some(verdict) = round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
         ratio, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
-    ) {
-        return narrowed;
+    ).settled() {
+        return verdict;
     }
     tan_walker::<C, SCALE>(raw, GUARD + extra_digits, mode)
 }
@@ -2498,13 +2523,19 @@ fn tan_walker_rung_g<C: WideTrigCore, Wk: BigInt, const SCALE: u32>(
     raw: C::Storage,
     base_guard_digits: u32,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::algos::exp::exp_generic as eg;
     let base_working_scale = SCALE + base_guard_digits;
+    // Pole recorded out of the recompute closures — see [`tan_walker`]. The
+    // two closures are live at once, so they cannot share one flag (each
+    // would need its own mutable borrow); a pole at EITHER width is the same
+    // verdict, so they are OR-ed below.
+    let mut pole_rung = false;
+    let mut pole_tier = false;
     let (rounded, decided) = round_to_storage_directed_widening_decided_g::<C::Storage, Wk, C::W>(
         base_guard_digits,
         SCALE,
@@ -2519,7 +2550,8 @@ where
                 pi_at_rung::<Wk>(working_scale, base_working_scale),
             );
             if cos_value == eg::zero::<Wk>() {
-                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+                pole_rung = true;
+                return eg::zero::<Wk>();
             }
             eg::div::<Wk>(sin_value, cos_value, working_scale)
         },
@@ -2528,14 +2560,19 @@ where
             let (sin_value, cos_value) =
                 C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
             if cos_value == C::zero() {
-                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+                pole_tier = true;
+                return C::zero();
             }
             C::div(sin_value, cos_value, working_scale)
         },
     );
+    if pole_rung || pole_tier {
+        return None;
+    }
+    let rounded = rounded?;
     // Deep sub-resolution tiny-`x` band (`j* ≥ 5`): `tan` always EXPANDS.
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        rounded, decided, raw, mode, false, <C::W as BigInt>::BITS)
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        rounded, decided, raw, mode, false, <C::W as BigInt>::BITS))
 }
 
 /// Rung-generic `atan` — the inverse-tangent kernel run at an
@@ -2569,7 +2606,7 @@ pub(crate) fn atan_series_g<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     Wk::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -2577,7 +2614,7 @@ where
     // Analytic tiny-`x` directed decision — the SAME pre-empt the tier
     // [`atan_series`] carries (relocated from the policy layer).
     if let Some(pinned) = tiny_x_linear_directed::<C::Storage, SCALE>(raw, mode, false) {
-        return pinned;
+        return Some(pinned);
     }
     let (rounded, decided) = if DIRECTED {
         // Two-width fall-up — see [`sin_series_g`].
@@ -2623,15 +2660,16 @@ where
                 C::to_work_scaled(raw, guard_digits), SCALE + guard_digits),
         )
     };
+    let rounded = rounded?;
     // Deep sub-resolution band (`j* ≥ 5`): `atan` alternates like `sin`.
     // Exact bracket first — see [`sin_series`].
     if let Some(bracketed) = adjust_alternating_bracket::<C::Storage, C::W, SCALE>(
         rounded, raw, mode, AlternatingSeries::Atan)
     {
-        return bracketed;
+        return Some(bracketed);
     }
-    tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
-        rounded, decided, raw, mode, true, <C::W as BigInt>::BITS)
+    Some(tiny_x_deep_directed_adjust::<C::Storage, SCALE>(
+        rounded, decided, raw, mode, true, <C::W as BigInt>::BITS))
 }
 
 /// `π` at working scale `w` in the rung integer `Wk`: the per-scale
@@ -2685,16 +2723,28 @@ where
 }
 
 /// Narrow a working-scale `signed` value (in the work int `S`) to storage
-/// `St`, panicking when it exceeds the storage range. When `S` is NARROWER
+/// `St`, returning `None` when it exceeds the storage range. When `S` is
+/// NARROWER
 /// than `St` (the work-rung case — a rung below the storage width admitted
 /// by the trig magnitude gate) every `S`-representable value fits the wider
 /// storage, so the bounds check is vacuously true and skipped — `storage_max` /
 /// `storage_min` cannot even be represented in `S` (a down-resize would truncate
 /// their magnitude into garbage bounds). The `LIMBS` compare const-folds per
 /// monomorphisation.
+///
+/// This is THE wide-tier out-of-range detection point — the single place the
+/// wide kernels learn a result does not fit storage. It reports that as
+/// `None` rather than panicking so the `checked_` surface can propagate it;
+/// the strict surface re-applies the panic once, in its policy `dispatch`
+/// wrapper (`checked_dispatch(..).unwrap_or_else(panic)`), per the overflow
+/// contract's "detect once, apply the policy in the wrapper". The narrow
+/// tiers reach the same verdict a different way — they compute in an integer
+/// wider than storage and round-trip through `policy::narrow_fit` — which is
+/// why the seam originally stopped at D18/D38: nothing needed to come OUT of
+/// the narrow kernels, whereas here the detection lives inside them.
 #[inline]
 fn narrow_range_checked_g<St: BigInt + Copy, S: BigInt>(
-    signed: S, storage_max: St, storage_min: St) -> St
+    signed: S, storage_max: St, storage_min: St) -> Option<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -2702,7 +2752,7 @@ where
         let max_w = BigInt::resize_to::<S>(storage_max);
         let min_w = BigInt::resize_to::<S>(storage_min);
         if signed > max_w || signed < min_w {
-            panic!("wide-tier strict transcendental: result out of range");
+            return None;
         }
     }
     // Down-resize through `S`'s EXACT scratch (`unpack_mag` +
@@ -2716,12 +2766,14 @@ where
     let mut buf =
         <S::Scratch as crate::int::types::compute_limbs::ComputeLimbs>::single_u64();
     crate::algos::exp::exp_generic::unpack_mag(mag, buf.as_mut());
-    St::from_mag_sign_u64(buf.as_ref(), is_negative)
+    Some(St::from_mag_sign_u64(buf.as_ref(), is_negative))
 }
 
 /// Work-int-generic narrowing of a `working_value` (at `working_scale`) down
 /// to storage scale `target`, rounded under `mode`, into storage `St`.
 /// `storage_max`/`storage_min` are `St::MAX`/`MIN`, caller-supplied.
+/// `None` when the rounded result does not fit storage — see
+/// [`narrow_range_checked_g`] for why the verdict is a value, not a panic.
 #[inline]
 pub(crate) fn round_to_storage_with_g<St: BigInt + Copy, S: BigInt>(
     working_value: S,
@@ -2730,7 +2782,7 @@ pub(crate) fn round_to_storage_with_g<St: BigInt + Copy, S: BigInt>(
     mode: RoundingMode,
     storage_max: St,
     storage_min: St,
-) -> St
+) -> Option<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -2822,7 +2874,7 @@ fn near_min_resolve_g<St: BigInt + Copy, S: BigInt>(
     storage_max: St,
     storage_min: St,
     recompute: &mut dyn FnMut(u32) -> (S, Option<TailSign>),
-) -> (St, bool)
+) -> (Option<St>, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -2852,8 +2904,8 @@ where
         let magnitude = if widened < lit(0) { -widened } else { widened };
         ((bit_length(magnitude) as u64 * 30103 / 100_000) as u32 + 1).saturating_sub(target)
     };
-    let range_check = |signed: S| -> St { narrow_range_checked_g::<St, S>(signed, storage_max, storage_min) };
-    let finish = |neg: bool, q: S, bump: bool| -> St {
+    let range_check = |signed: S| -> Option<St> { narrow_range_checked_g::<St, S>(signed, storage_max, storage_min) };
+    let finish = |neg: bool, q: S, bump: bool| -> Option<St> {
         let q_mag = if bump { q + lit(1) } else { q };
         range_check(if neg { -q_mag } else { q_mag })
     };
@@ -2878,7 +2930,7 @@ where
 
     if is_nearest_mode(mode) {
         // Nearest rounding of a probe, by the true `rem` vs `half` ordering.
-        let round_half = |neg: bool, q: S, rem: S, divisor: S| -> St {
+        let round_half = |neg: bool, q: S, rem: S, divisor: S| -> Option<St> {
             let half = divisor / lit(2);
             let cmp_r = if rem < half {
                 ::core::cmp::Ordering::Less
@@ -2916,7 +2968,12 @@ where
         // blanket it bypasses stays the UNTAGGED fallback; where that
         // blanket's own direction is and is not proven is recorded in
         // issue #96.
-        let tag_decides = |neg: bool, q: S, rem: S, div: S, tail: Option<TailSign>| -> Option<St> {
+        // `Option<Option<St>>`: the OUTER layer is the tag's verdict ("did the
+        // tag decide this narrowing?"), the INNER one the range verdict from
+        // [`narrow_range_checked_g`]. The two are independent, and the call
+        // sites destructure the outer and hand the inner straight back as this
+        // walker's own `Option<St>` result.
+        let tag_decides = |neg: bool, q: S, rem: S, div: S, tail: Option<TailSign>| -> Option<Option<St>> {
             match tail {
                 Some(t) if rem == div - rem => {
                     Some(finish(neg, q, (t == TailSign::Above) == !neg))
@@ -2933,7 +2990,14 @@ where
         if dist0 > pow10(base_guard_digits) / lit(1000) {
             return (round_half(neg0, q0, rem0, div0), true); // not near a half-ULP tie
         }
-        let lo = round_half(neg0, q0, rem0, div0);
+        // An out-of-range BASE narrowing is already the verdict: escalation
+        // refines the deciding DIGITS, never the magnitude, so no deeper probe
+        // brings an over-`MAX` value back inside storage. This point PANICKED
+        // before the seam was threaded, so returning here reports the identical
+        // condition — the strict form re-panics on it in its `dispatch` wrapper.
+        let Some(lo) = round_half(neg0, q0, rem0, div0) else {
+            return (None, true);
+        };
         let max_guard_digits = max_guard_digits_for(int_digits_of(lo));
         // Cross-depth confirmation: the kernels' working-scale error can reach
         // well past the absolute noise floor (measured ~10^12 units at some
@@ -2981,7 +3045,7 @@ where
                 if never_exact {
                     return (finish(neg0, q0, true), false);
                 }
-                return (lo, false);
+                return (Some(lo), false);
             }
             let step = (target + base_guard_digits).max(base_guard_digits);
             let next_guard_digits = guard_digits.saturating_add(step).min(max_guard_digits);
@@ -3011,7 +3075,7 @@ where
     // directed
     // Directed semantics: any nonzero residual (or the `never_exact`
     // sub-resolution rule) nudges Ceiling/Floor by the result's sign.
-    let dir_round = |neg: bool, q: S, rem: S| -> St {
+    let dir_round = |neg: bool, q: S, rem: S| -> Option<St> {
         let result_positive = !neg;
         let residual_present = rem != lit(0) || never_exact;
         let bump = residual_present
@@ -3034,7 +3098,11 @@ where
     if dist0 > pow10(base_guard_digits) / lit(1000) {
         return (dir_round(neg0, q0, rem0), true); // clear of a grid line
     }
-    let base = dir_round(neg0, q0, rem0);
+    // Out-of-range at the base narrowing is the verdict — see the nearest
+    // branch's identical short-circuit.
+    let Some(base) = dir_round(neg0, q0, rem0) else {
+        return (None, true);
+    };
     let max_guard_digits = max_guard_digits_for(int_digits_of(base));
     // Cross-depth confirmation — see the nearest branch: a probe's signal
     // `(position, side)` is trusted only once a probe at a different depth
@@ -3184,7 +3252,7 @@ pub(crate) fn round_to_storage_widening_g<St: BigInt + Copy, S1: BigInt, S2: Big
     storage_min: St,
     mut recompute1: impl FnMut(u32) -> S1,
     mut recompute2: impl FnMut(u32) -> S2,
-) -> St
+) -> Option<St>
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -3223,7 +3291,7 @@ pub(crate) fn round_to_storage_widening_tail_signed_g<St: BigInt + Copy, S1: Big
     storage_min: St,
     mut recompute1: impl FnMut(u32) -> (S1, Option<TailSign>),
     mut recompute2: impl FnMut(u32) -> (S2, Option<TailSign>),
-) -> St
+) -> Option<St>
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -3231,6 +3299,10 @@ where
     let (v1, resolved1) = near_min_resolve_g::<St, S1>(
         base_guard_digits, target, mode, never_exact, storage_max, storage_min, &mut recompute1,
     );
+    // Out of range at `S1` is already the verdict: the wider `S2` retry
+    // refines the deciding DIGITS, never the magnitude, so it cannot bring an
+    // over-`MAX` value back inside storage.
+    let v1 = v1?;
     // `S1` only proves a residual is past the probe horizon when its width
     // actually reaches it — and a result carrying integer digits raises both
     // the horizon AND the noise floor by that count (see the resolver), so
@@ -3241,7 +3313,7 @@ where
         ((magnitude_bits as u64 * 30103 / 100_000) as u32 + 1).saturating_sub(target)
     };
     if resolved1 || (<S1>::BITS / 8) >= ZIV_PRECISION_HORIZON + int_digits {
-        return v1;
+        return Some(v1);
     }
     near_min_resolve_g::<St, S2>(
         base_guard_digits, target, mode, never_exact, storage_max, storage_min, &mut recompute2,
@@ -3262,6 +3334,41 @@ where
 /// working scale), and the caller must escalate through the full Ziv
 /// walker instead of concluding from this single shot. One `div_rem` —
 /// the clear path costs what the plain narrowing cost.
+/// Verdict of the single-shot [`round_to_storage_clear_of_tie_g`] narrowing.
+///
+/// Three outcomes, not two: range and tie-ness are INDEPENDENT questions, so
+/// the out-of-range verdict gets its own arm rather than borrowing
+/// [`Self::Escalate`]. Folding them would send every overflowing value on a
+/// full Ziv ladder walk only to reach the same answer at the bottom.
+pub(crate) enum ClearShot<St> {
+    /// Residual clear of the mode's deciding boundary: this IS the answer.
+    Decided(St),
+    /// The rounded result does not fit storage — `None` for the `checked_`
+    /// surface, the panic for the strict one (re-applied in its `dispatch`).
+    OutOfRange,
+    /// Residual inside the near-tie band: the caller must escalate through
+    /// the full Ziv walker.
+    Escalate,
+}
+
+impl<St> ClearShot<St> {
+    /// Collapse the shot into "did this settle the narrowing?".
+    ///
+    /// `Some(verdict)` when it did — the inner `Option` being the caller's own
+    /// `Option<Storage>` return, `None` inside it meaning out of range.
+    /// `None` when the residual sat in the near-tie band and the caller must
+    /// escalate. Lets a call site stay the one-liner it was before the seam:
+    /// `if let Some(verdict) = shot.settled() { return verdict; }`.
+    #[inline]
+    pub(crate) fn settled(self) -> Option<Option<St>> {
+        match self {
+            ClearShot::Decided(value) => Some(Some(value)),
+            ClearShot::OutOfRange => Some(None),
+            ClearShot::Escalate => None,
+        }
+    }
+}
+
 #[inline]
 pub(crate) fn round_to_storage_clear_of_tie_g<St: BigInt + Copy, S: BigInt>(
     working_value: S,
@@ -3270,17 +3377,20 @@ pub(crate) fn round_to_storage_clear_of_tie_g<St: BigInt + Copy, S: BigInt>(
     mode: RoundingMode,
     storage_max: St,
     storage_min: St,
-) -> Option<St>
+) -> ClearShot<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
     use crate::support::rounding::{is_nearest_mode, should_bump};
     let lit = |n: i128| <S as BigInt>::from_i128(n);
+    let narrowed = |signed: S| match narrow_range_checked_g::<St, S>(signed, storage_max, storage_min) {
+        Some(value) => ClearShot::Decided(value),
+        None => ClearShot::OutOfRange,
+    };
     let shift = working_scale - target;
     if shift == 0 {
         // Already at storage scale: the value IS the answer (no residual).
-        return Some(narrow_range_checked_g::<St, S>(
-            working_value, storage_max, storage_min));
+        return narrowed(working_value);
     }
     let neg = working_value < lit(0);
     let mag = if neg { -working_value } else { working_value };
@@ -3301,7 +3411,7 @@ where
         let half = divisor >> 1;
         let dist = if rem < half { half - rem } else { rem - half };
         if dist <= band {
-            return None;
+            return ClearShot::Escalate;
         }
         rem != lit(0)
             && should_bump(
@@ -3314,7 +3424,7 @@ where
         // Distance to the grid line.
         let dist = if rem < divisor - rem { rem } else { divisor - rem };
         if dist <= band {
-            return None;
+            return ClearShot::Escalate;
         }
         rem != lit(0)
             && match mode {
@@ -3331,7 +3441,7 @@ where
     };
     let q_mag = if bump { q + lit(1) } else { q };
     let signed = if neg { -q_mag } else { q_mag };
-    Some(narrow_range_checked_g::<St, S>(signed, storage_max, storage_min))
+    narrowed(signed)
 }
 
 /// Work-int-generic directed-rounding narrowing with Ziv escalation. `St` =
@@ -3344,7 +3454,7 @@ pub(crate) fn round_to_storage_directed_g<St: BigInt + Copy, S: BigInt>(
     storage_max: St,
     storage_min: St,
     mut recompute: impl FnMut(u32) -> S,
-) -> St
+) -> Option<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3376,7 +3486,7 @@ pub(crate) fn round_to_storage_tail_signed_g<St: BigInt + Copy, S: BigInt>(
     storage_max: St,
     storage_min: St,
     mut recompute: impl FnMut(u32) -> (S, Option<TailSign>),
-) -> St
+) -> Option<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3399,7 +3509,7 @@ pub(crate) fn round_to_storage_directed_decided_g<St: BigInt + Copy, S: BigInt>(
     storage_max: St,
     storage_min: St,
     mut recompute: impl FnMut(u32) -> S,
-) -> (St, bool)
+) -> (Option<St>, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3418,7 +3528,7 @@ pub(crate) fn round_to_storage_directed_never_exact_g<St: BigInt + Copy, S: BigI
     storage_max: St,
     storage_min: St,
     mut recompute: impl FnMut(u32) -> S,
-) -> St
+) -> Option<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3438,7 +3548,7 @@ pub(crate) fn round_to_storage_directed_near_special_g<St: BigInt + Copy, S: Big
     storage_max: St,
     storage_min: St,
     mut recompute: impl FnMut(u32) -> S,
-) -> St
+) -> Option<St>
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3475,7 +3585,7 @@ pub(crate) fn round_to_storage_directed_widening_g<St: BigInt + Copy, S1: BigInt
     storage_min: St,
     mut recompute1: impl FnMut(u32) -> S1,
     mut recompute2: impl FnMut(u32) -> S2,
-) -> St
+) -> Option<St>
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -3483,6 +3593,11 @@ where
     let (narrowed, resolved) = round_to_storage_directed_impl_g::<St, S1>(
         base_guard_digits, target, mode, false, false, storage_max, storage_min, &mut recompute1,
     );
+    // Out of range is width-independent: the `S2` retry resolves deciding
+    // digits, so it cannot pull an over-`MAX` magnitude back into storage.
+    if narrowed.is_none() {
+        return None;
+    }
     if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
         return narrowed;
     }
@@ -3506,7 +3621,7 @@ pub(crate) fn round_to_storage_directed_widening_decided_g<St: BigInt + Copy, S1
     storage_min: St,
     mut recompute1: impl FnMut(u32) -> S1,
     mut recompute2: impl FnMut(u32) -> S2,
-) -> (St, bool)
+) -> (Option<St>, bool)
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -3514,6 +3629,10 @@ where
     let (narrowed, resolved) = round_to_storage_directed_impl_g::<St, S1>(
         base_guard_digits, target, mode, false, false, storage_max, storage_min, &mut recompute1,
     );
+    // Out of range is width-independent — see the `.0`-only sibling.
+    if narrowed.is_none() {
+        return (None, resolved);
+    }
     if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
         return (narrowed, resolved);
     }
@@ -3540,7 +3659,7 @@ pub(crate) fn round_to_storage_directed_near_special_widening_g<
     storage_min: St,
     mut recompute1: impl FnMut(u32) -> S1,
     mut recompute2: impl FnMut(u32) -> S2,
-) -> St
+) -> Option<St>
 where
     S1::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     S2::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -3548,6 +3667,10 @@ where
     let (narrowed, resolved) = round_to_storage_directed_impl_g::<St, S1>(
         base_guard_digits, target, mode, true, false, storage_max, storage_min, &mut recompute1,
     );
+    // Out of range is width-independent — see the non-special sibling.
+    if narrowed.is_none() {
+        return None;
+    }
     if resolved || <S1 as BigInt>::BITS >= <S2 as BigInt>::BITS {
         return narrowed;
     }
@@ -3574,7 +3697,7 @@ fn round_to_storage_directed_impl_g<St: BigInt + Copy, S: BigInt>(
     storage_max: St,
     storage_min: St,
     recompute: &mut dyn FnMut(u32) -> S,
-) -> (St, bool)
+) -> (Option<St>, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3629,7 +3752,7 @@ fn round_to_storage_directed_tagged_impl_g<St: BigInt + Copy, S: BigInt>(
     storage_max: St,
     storage_min: St,
     recompute: &mut dyn FnMut(u32) -> (S, Option<TailSign>),
-) -> (St, bool)
+) -> (Option<St>, bool)
 where
     S::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
 {
@@ -3673,7 +3796,7 @@ where
         // the deep-tie families the deciding term outruns every reachable
         // depth anyway, so the ladder previously ran to its cap only to hand
         // back this same tag-decided base narrowing.
-        let mut nearest_narrow = |guard_digits: u32| -> (St, S, bool) {
+        let mut nearest_narrow = |guard_digits: u32| -> (Option<St>, S, bool) {
             let (working_value, tail) = recompute(guard_digits);
             let neg = working_value < lit(0);
             let mag = if neg { -working_value } else { working_value };
@@ -3734,8 +3857,13 @@ where
         if !force_confirm && dist0 > band_of(base_guard_digits) {
             return (lo, true);
         }
+        // Out of range at the base narrowing is already the verdict — the
+        // ladder below refines the deciding DIGITS, never the magnitude.
+        let Some(lo_value) = lo else {
+            return (None, true);
+        };
         let int_digits = {
-            let narrowed = BigInt::resize_to::<S>(lo);
+            let narrowed = BigInt::resize_to::<S>(lo_value);
             let magnitude = if narrowed < lit(0) { -narrowed } else { narrowed };
             let magnitude_bits = bit_length(magnitude);
             let storage_digits = (magnitude_bits as u64 * 30103 / 100_000) as u32 + 1;
@@ -4028,6 +4156,7 @@ mod directed_walker_contract {
             St::MIN,
             recompute,
         )
+        .expect("in-range reference value")
         .as_i128()
     }
 
@@ -4114,6 +4243,7 @@ mod directed_walker_contract {
                     }
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(got, want, "late-visible deciding digit, mode={mode:?}");
         }
@@ -4329,6 +4459,7 @@ mod tagged_half_walker_contract {
             |g| (half_tie::<S1>(g), tail),
             |g| (half_tie::<S2>(g), tail),
         )
+        .expect("in-range reference value")
         .as_i128()
     }
 
@@ -4426,6 +4557,7 @@ mod tagged_half_walker_contract {
                     (grid::<S2>(g), Some(TailSign::Below))
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(r, expect, "a Below tag on the grid line under {mode:?}");
             assert_eq!(
@@ -4495,6 +4627,7 @@ mod tagged_half_sibling_walker_contract {
                     (probe_value(g, 5), Some(TailSign::Below))
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(r, DOWN, "a Below tag at an exact half must round down under {mode:?}");
             assert_eq!(
@@ -4527,6 +4660,7 @@ mod tagged_half_sibling_walker_contract {
                     }
                 },
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(
                 r, DOWN,
@@ -4554,6 +4688,7 @@ mod tagged_half_sibling_walker_contract {
                 St::MIN,
                 |g| (probe_value(g, 5), None),
             )
+            .expect("in-range reference value")
             .as_i128();
             assert_eq!(r, expect, "the untagged tie-break must stand under {mode:?}");
         }

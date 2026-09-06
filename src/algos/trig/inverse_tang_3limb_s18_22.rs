@@ -104,7 +104,7 @@ fn asin_fixed<const SCALE: u32>(working_value: core::W, working_scale: u32) -> c
 /// `asin` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_value = asin_fixed::<SCALE>(working_value, working_scale);
@@ -115,8 +115,9 @@ pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         asin_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::inverse_schoolbook::asin_schoolbook::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::trig::inverse_schoolbook::asin_schoolbook::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),
@@ -126,7 +127,7 @@ pub(crate) fn asin<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
 /// `acos` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Option<Int<3>> {
     let working_scale = SCALE + GUARD_NARROW;
     let working_value = core::to_work_scaled(raw, GUARD_NARROW);
     let asin_w = asin_fixed::<SCALE>(working_value, working_scale);
@@ -138,8 +139,9 @@ pub(crate) fn acos<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> 
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         acos_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::inverse_schoolbook::acos_schoolbook::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::trig::inverse_schoolbook::acos_schoolbook::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(raw, mode),
@@ -153,7 +155,7 @@ pub(crate) fn atan2<const SCALE: u32>(
     y_raw: Int<3>,
     x_raw: Int<3>,
     mode: RoundingMode,
-) -> Int<3> {
+) -> Option<Int<3>> {
     let working_scale = SCALE + GUARD_NARROW;
     let zero_s = Int::<3>::ZERO;
     let atan2_value = if x_raw == zero_s {
@@ -204,8 +206,9 @@ pub(crate) fn atan2<const SCALE: u32>(
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<Int<3>, _>(
         atan2_value, working_scale, SCALE, mode, Int::<3>::MAX, Int::<3>::MIN,
     ) {
-        Some(rounded) => rounded,
-        None => crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<
             crate::types::widths::wide_trig_d57::Core,
             SCALE,
         >(y_raw, x_raw, mode),

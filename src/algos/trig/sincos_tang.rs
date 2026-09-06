@@ -91,17 +91,17 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     // sin(0) = 0, cos(0) = 1 short-circuits — matches `wide_kernel`.
     if raw == C::storage_zero() {
-        return match which {
+        return Some(match which {
             Which::Sin => C::storage_zero(),
             Which::Cos => C::storage_one(SCALE),
-        };
+        });
     }
 
     let working_scale = SCALE + C::GUARD;
@@ -221,8 +221,9 @@ where
     match crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<C::Storage, C::W>(
         result, working_scale, SCALE, mode, C::storage_max(), C::storage_min(),
     ) {
-        Some(rounded) => rounded,
-        None => match which {
+        crate::algos::support::wide_trig_core::ClearShot::Decided(rounded) => Some(rounded),
+        crate::algos::support::wide_trig_core::ClearShot::OutOfRange => None,
+        crate::algos::support::wide_trig_core::ClearShot::Escalate => match which {
             Which::Sin => crate::algos::support::wide_trig_core::sin_series::<C, SCALE>(raw, mode),
             Which::Cos => crate::algos::support::wide_trig_core::cos_series::<C, SCALE>(raw, mode),
         },
@@ -235,7 +236,7 @@ where
 pub(crate) fn sin_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
@@ -249,7 +250,7 @@ where
 pub(crate) fn cos_tang_with_taylor<C: WideTrigCore, const SCALE: u32, const M: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,

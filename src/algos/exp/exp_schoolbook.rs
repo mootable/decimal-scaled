@@ -118,9 +118,9 @@ pub(crate) fn exp_schoolbook_fixed(working_value: Fixed, working_scale: u32) -> 
 pub(crate) fn exp_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if raw == C::storage_zero() {
-        return C::storage_one(SCALE);
+        return Some(C::storage_one(SCALE));
     }
     // `exp(x)` for `x != 0` is transcendental — never exactly on a storage grid
     // line (`raw == 0` is pinned above) — so a zero working residual is a
@@ -238,7 +238,7 @@ mod tests {
                 for mode in MODES {
                     assert_eq!(
                         crate::algos::exp::exp_schoolbook::exp_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).exp_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).exp_with(mode).0),
                         "D57 exp schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

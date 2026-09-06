@@ -122,7 +122,7 @@ pub(crate) fn ln_schoolbook_fixed(working_value: Fixed, working_scale: u32) -> F
 pub(crate) fn ln_schoolbook<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if raw <= C::storage_zero() {
         panic!("wide-tier ln schoolbook: argument must be positive");
     }
@@ -240,7 +240,7 @@ mod tests {
                 for mode in MODES {
                     assert_eq!(
                         crate::algos::ln::ln_schoolbook::ln_schoolbook::<Core, S>(raw, mode),
-                        D::<Int<3>, S>(raw).ln_with(mode).0,
+                        Some(D::<Int<3>, S>(raw).ln_with(mode).0),
                         "D57 ln schoolbook != routed at units={units} mode={mode:?}"
                     );
                 }

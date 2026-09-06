@@ -185,14 +185,14 @@ where
     if single_shot.abs() >= Int::<N>::MAX - Int::<N>::ONE {
         return Some(single_shot);
     }
-    Some(log_ratio_finish::<N, Wk, SCALE>(
+    log_ratio_finish::<N, Wk, SCALE>(
         raw,
         base_raw,
         mode,
         COMPOSITION_GUARD,
         probe,
         ratio_at,
-    ))
+    )
 }
 
 // ── The conditioned composition ─────────────────────────────────────────
@@ -391,7 +391,7 @@ pub(crate) fn log_ln_divide_conditioned<const N: usize, Wk: BigInt, const SCALE:
     mode: RoundingMode,
     guard: u32,
     ln_at: impl Fn(Wk, u32) -> Wk,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -623,7 +623,7 @@ pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     guard: u32,
     ln_at: &impl Fn(Wk, u32) -> Wk,
     probe_ratio: Wk,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -664,7 +664,7 @@ pub(crate) fn log_ratio_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     guard: u32,
     probe_ratio: Wk,
     ratio_at: impl Fn(u32) -> Wk,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -683,15 +683,17 @@ where
     // narrows in one shot — the walker's own first probe, arm for arm
     // (`directed_narrow` / `nearest_narrow` at the base guard), so this is
     // bit-identical to entering the walker and returning from its first step.
-    if let Some(narrowed) = round_to_storage_clear_of_tie_g::<Int<N>, Wk>(
+    if let Some(verdict) = round_to_storage_clear_of_tie_g::<Int<N>, Wk>(
         probe_ratio,
         base_working_scale,
         SCALE,
         mode,
         Int::<N>::MAX,
         Int::<N>::MIN,
-    ) {
-        return narrowed;
+    )
+    .settled()
+    {
+        return verdict;
     }
     // Near a boundary. An EXACT rational result never resolves by escalation:
     // the probe's residual at every depth is the kernel's own noise around
@@ -708,7 +710,7 @@ where
         base_working_scale,
         mode,
     ) {
-        return pinned;
+        return Some(pinned);
     }
     // Directed narrowing through the shared Ziv escalation. The walker
     // always probes `guard` first, and that probe is `probe_ratio` (pure
@@ -891,14 +893,14 @@ where
         if bump { result_magnitude + Wk::ONE } else { result_magnitude }
     };
     let signed = if is_negative { -magnitude } else { magnitude };
-    Some(round_to_storage_with_g::<Int<N>, Wk>(
+    round_to_storage_with_g::<Int<N>, Wk>(
         signed,
         scale,
         scale,
         mode,
         Int::<N>::MAX,
         Int::<N>::MIN,
-    ))
+    )
 }
 
 /// `base^exponent` in `Wk`, `None` when the result could exceed the bit
@@ -968,7 +970,7 @@ fn exact_int_at_scale<const N: usize, Wk: BigInt>(
     integer_value: i128,
     scale: u32,
     mode: RoundingMode,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -1433,7 +1435,7 @@ mod tests {
                     _ => grid,
                 };
                 let got = conditioned_finish::<3, W, S>(raw, braw, mode, guard, &ln_at, probe);
-                assert_eq!(got, expected, "p={p} q={q} mode={mode:?}");
+                assert_eq!(got, Some(expected), "p={p} q={q} mode={mode:?}");
             }
         }
     }
@@ -1546,7 +1548,7 @@ mod tests {
                     SCALE,
                     exponent,
                 ) {
-                    core::exact_int_at_scale(exponent, SCALE)
+                    Some(core::exact_int_at_scale(exponent, SCALE))
                 } else {
                     core::round_to_storage_directed::<core::Wagm>(core::GUARD, SCALE, mode, |guard_digits| {
                         if guard_digits == core::GUARD {

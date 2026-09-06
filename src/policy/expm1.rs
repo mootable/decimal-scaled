@@ -135,6 +135,19 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     raw: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
+    checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("expm1", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`dispatch`]: same routing, the
+/// out-of-range verdict propagating instead of panicking.
+#[inline]
+#[must_use]
+pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
     routed::<N, SCALE>(raw, resolve::<N, SCALE>(&raw), mode)
 }
 
@@ -149,11 +162,11 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
 /// run there — the wide split between `C::W` and `C::Wexp` has no narrow
 /// analogue.
 #[inline]
-fn narrow_strict<const N: usize, const SCALE: u32>(
+fn narrow_routed<const N: usize, const SCALE: u32>(
     raw: Int<N>,
     algo: Algorithm,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     let raw_narrow = raw.resize_to::<Int<2>>();
     let out = match algo {
         Algorithm::Series => expm1_series_g::<Int<2>, WZiv, SCALE>(
@@ -171,7 +184,9 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
             mode,
         ),
     };
-    super::narrow_checked::<N>(out, "expm1", SCALE)
+    // Both verdicts are the same proposition — the kernel's narrowing and
+    // the storage fit — so they compose. `dispatch` re-raises once.
+    super::narrow_fit::<N>(out?)
 }
 
 /// Wide strict arm at the tier `C`. Each kernel sources its own width
@@ -184,7 +199,7 @@ fn wide_strict<C: crate::algos::support::wide_trig_core::WideTrigCore, const SCA
     raw: C::Storage,
     algo: Algorithm,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
     <C::Wexp as BigInt>::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
@@ -209,30 +224,30 @@ fn routed<const N: usize, const SCALE: u32>(
     raw: Int<N>,
     algo: Algorithm,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     match N {
-        1 | 2 => narrow_strict::<N, SCALE>(raw, algo, mode),
+        1 | 2 => narrow_routed::<N, SCALE>(raw, algo, mode),
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => wide_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), algo, mode).resize_to::<Int<N>>(),
+        3 => wide_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => wide_strict::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), algo, mode).resize_to::<Int<N>>(),
+        4 => wide_strict::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => wide_strict::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), algo, mode).resize_to::<Int<N>>(),
+        6 => wide_strict::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => wide_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), algo, mode).resize_to::<Int<N>>(),
+        8 => wide_strict::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => wide_strict::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), algo, mode).resize_to::<Int<N>>(),
+        12 => wide_strict::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => wide_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), algo, mode).resize_to::<Int<N>>(),
+        16 => wide_strict::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => wide_strict::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), algo, mode).resize_to::<Int<N>>(),
+        24 => wide_strict::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => wide_strict::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), algo, mode).resize_to::<Int<N>>(),
+        32 => wide_strict::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => wide_strict::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), algo, mode).resize_to::<Int<N>>(),
+        48 => wide_strict::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => wide_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), algo, mode).resize_to::<Int<N>>(),
-        _ => narrow_strict::<N, SCALE>(raw, algo, mode),
+        64 => wide_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
+        _ => narrow_routed::<N, SCALE>(raw, algo, mode),
     }
 }
 

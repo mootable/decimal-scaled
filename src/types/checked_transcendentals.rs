@@ -38,10 +38,10 @@
 //!   same single detection point whose `unwrap` is the default form's
 //!   panic (see the per-policy `checked_dispatch` primitives).
 //!
-//! A method's doc states which of these apply. Where the out-of-range
-//! seam has not yet been threaded through a kernel family, the doc says
-//! so explicitly: those methods still panic on an out-of-range result
-//! (identically to the default form — never a silent wrong value).
+//! A method's doc states which of these apply. The out-of-range seam is
+//! threaded through every kernel family at every tier, so a range-checked
+//! method answers `None` rather than panicking wherever the default form
+//! would panic — D18, D38 and the wide tiers alike.
 //!
 //! [`DEFAULT_ROUNDING_MODE`]: crate::support::rounding::DEFAULT_ROUNDING_MODE
 
@@ -73,8 +73,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// only near a tier's maximum scale). Otherwise
     /// `Some(self.ln_with(mode))`, bit-identical.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (kernel seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     /// Domain errors return `None` at every tier.
     ///
     /// ```
@@ -116,9 +115,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// result does not fit the storage range. Otherwise
     /// `Some(self.log_with(base, mode))`, bit-identical.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam not yet
-    /// reached). Domain errors return `None` at every tier.
+    /// Out-of-range detection is exact at every tier, as are domain errors.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -159,8 +156,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// Returns `None` when `self <= 0`, or when the result does not fit
     /// the storage range. Otherwise bit-identical `Some`.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -199,8 +195,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// Returns `None` when `self <= 0`, or when the result does not fit
     /// the storage range. Otherwise bit-identical `Some`.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -261,9 +256,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
         if self.0 <= -Self::unit_bits() {
             return None;
         }
-        Some(Self(crate::policy::log1p::dispatch::<N, SCALE>(
-            self.0, mode,
-        )))
+        crate::policy::log1p::checked_dispatch::<N, SCALE>(self.0, mode).map(Self)
     }
 
     /// Default-mode sibling of [`Self::checked_log1p_with`].
@@ -289,8 +282,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// which the default form panics. Otherwise
     /// `Some(self.exp_with(mode))`, bit-identical.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (kernel seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -326,8 +318,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// No domain wall; `None` means the result does not fit the storage
     /// range. Otherwise bit-identical `Some`.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -366,14 +357,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// range — the same condition on which the default form panics.
     /// Otherwise `Some(self.expm1_with(mode))`, bit-identical.
     ///
-    /// Out-of-range detection: the kernel seam that reports overflow as
-    /// an `Option` has not been threaded through `expm1`, so at every
-    /// tier an out-of-range result still PANICS rather than returning
-    /// `None`, and this form is `Some` whenever the default form
-    /// returns at all. That is the same gap the wide-tier note on
-    /// [`Self::checked_exp_with`] records — `exp` has the seam on
-    /// D18/D38, `expm1` does not have it yet — so this pair completes
-    /// the documented surface rather than adding a stronger guarantee.
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -386,9 +370,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_expm1_with(self, mode: RoundingMode) -> Option<Self> {
-        Some(Self(crate::policy::expm1::dispatch::<N, SCALE>(
-            self.0, mode,
-        )))
+        crate::policy::expm1::checked_dispatch::<N, SCALE>(self.0, mode).map(Self)
     }
 
     /// Default-mode sibling of [`Self::checked_expm1_with`].
@@ -414,8 +396,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// `checked_powf` returns `Some(ZERO)` there, matching the default
     /// form. `None` means the result does not fit the storage range.
     ///
-    /// Out-of-range detection: exact on D18/D38; on the wide tiers an
-    /// out-of-range result still panics (wide kernel-shell seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -591,7 +572,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_sin_with(self, mode: RoundingMode) -> Option<Self> {
-        Some(Self(crate::policy::trig::sin_dispatch::<N, SCALE>(self.0, mode)))
+        crate::policy::trig::checked_sin_dispatch::<N, SCALE>(self.0, mode).map(Self)
     }
 
     /// Default-mode sibling of [`Self::checked_sin_with`].
@@ -620,7 +601,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_cos_with(self, mode: RoundingMode) -> Option<Self> {
-        Some(Self(crate::policy::trig::cos_dispatch::<N, SCALE>(self.0, mode)))
+        crate::policy::trig::checked_cos_dispatch::<N, SCALE>(self.0, mode).map(Self)
     }
 
     /// Default-mode sibling of [`Self::checked_cos_with`].
@@ -641,10 +622,8 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// zero at the working precision (an odd multiple of π/2 to within
     /// the kernel's resolution) and when the result does not fit the
     /// storage range (near those asymptotes). Both conditions are
-    /// detected inside the kernels at every tier; this checked form
-    /// currently panics on them identically to the default form
-    /// (kernel seam not yet reached). For every other input
-    /// it returns bit-identical `Some`.
+    /// detected inside the kernels at every tier, and both come back as
+    /// `None`. For every other input it returns bit-identical `Some`.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -657,7 +636,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_tan_with(self, mode: RoundingMode) -> Option<Self> {
-        Some(Self(crate::policy::trig::tan_dispatch::<N, SCALE>(self.0, mode)))
+        crate::policy::trig::checked_tan_dispatch::<N, SCALE>(self.0, mode).map(Self)
     }
 
     /// Default-mode sibling of [`Self::checked_tan_with`].
@@ -765,7 +744,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_atan_with(self, mode: RoundingMode) -> Option<Self> {
-        Some(Self(crate::policy::trig::atan_dispatch::<N, SCALE>(self.0, mode)))
+        crate::policy::trig::checked_atan_dispatch::<N, SCALE>(self.0, mode).map(Self)
     }
 
     /// Default-mode sibling of [`Self::checked_atan_with`].
@@ -820,9 +799,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// the storage range (it grows like `e^|x|/2`). Otherwise
     /// bit-identical `Some`.
     ///
-    /// Out-of-range detection: exact on D18 (a result that fits the
-    /// D38 work width but not D18 storage is `None`); detection deeper
-    /// in the kernels (D38 and the wide tiers) still panics (kernel seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D18, D38, RoundingMode};
@@ -859,9 +836,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// `cosh` has no domain wall; `None` means the result does not fit
     /// the storage range. Otherwise bit-identical `Some`.
     ///
-    /// Out-of-range detection: exact on D18 (a result that fits the
-    /// D38 work width but not D18 storage is `None`); detection deeper
-    /// in the kernels (D38 and the wide tiers) still panics (kernel seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D18, D38, RoundingMode};
@@ -994,10 +969,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// Returns `None` when `|self| >= 1` (the default form's domain
     /// wall — `atanh` diverges at ±1). An out-of-range result (the
     /// logarithmic blow-up just inside ±1 at a near-maximum scale) is
-    /// `None` on D18 when it fits the D38 work width; detection deeper
-    /// in the kernels still panics, identically to the default form
-    /// (kernel seam not yet reached). Otherwise bit-identical
-    /// `Some`.
+    /// `None` at every tier. Otherwise bit-identical `Some`.
     ///
     /// ```
     /// use decimal_scaled::{D38, RoundingMode};
@@ -1041,9 +1013,7 @@ impl<const N: usize, const SCALE: u32> crate::D<Int<N>, SCALE> {
     /// storage range (the result is ~57.3× the input). Otherwise
     /// bit-identical `Some`.
     ///
-    /// Out-of-range detection: exact on D18 (a result that fits the
-    /// D38 work width but not D18 storage is `None`); detection deeper
-    /// in the kernels (D38 and the wide tiers) still panics (kernel seam not yet reached).
+    /// Out-of-range detection is exact at every tier.
     ///
     /// ```
     /// use decimal_scaled::{D18, D38, RoundingMode};

@@ -41,12 +41,12 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
     which: Which,
-) -> C::Storage {
+) -> Option<C::Storage> {
     if raw == C::storage_zero() {
-        return match which {
+        return Some(match which {
             Which::Sin => C::storage_zero(),
             Which::Cos => C::storage_one(SCALE),
-        };
+        });
     }
 
     // Directed modes decide which side of a storage grid line the true
@@ -65,7 +65,9 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     // working scale, so the kernel rounds to exactly ±10^SCALE and a directed
     // mode lands on the wrong side; sin/cos are strictly interior for raw != 0,
     // so the side is known a priori. See `wide_trig_core::adjust_bounded_extremum`.
-    crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(rounded, raw, mode)
+    Some(crate::algos::support::wide_trig_core::adjust_bounded_extremum::<C, SCALE>(
+        rounded?, raw, mode,
+    ))
 }
 
 /// Narrow `sin` for a wide tier — generic over `C`, `SCALE`, the
@@ -75,7 +77,7 @@ fn sin_cos<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
 pub(crate) fn sin_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     sin_cos::<C, SCALE, GUARD>(raw, mode, Which::Sin)
 }
 
@@ -86,7 +88,7 @@ pub(crate) fn sin_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GU
 pub(crate) fn cos_narrow_with_taylor<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage {
+) -> Option<C::Storage> {
     sin_cos::<C, SCALE, GUARD>(raw, mode, Which::Cos)
 }
 
@@ -109,56 +111,68 @@ pub(crate) fn tan_narrow_with_taylor<
 >(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as crate::int::types::traits::BigInt>::Scratch:
         crate::int::types::compute_limbs::ComputeLimbs,
 {
     if raw == C::storage_zero() {
-        return C::storage_zero();
+        return Some(C::storage_zero());
     }
     let base_working_scale = SCALE + GUARD;
     let base_working_value = C::to_work_scaled(raw, GUARD);
     let (sin_base, cos_base) = C::sin_cos_fixed::<SCALE>(base_working_value, base_working_scale);
     if cos_base == C::zero() {
-        panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
+        // The pole — see `wide_trig_core::tan_series`.
+        return None;
     }
     // Near-tie escapes — see `wide_trig_core::tan_series`: clear-of-band
     // residuals keep the single-shot cost; the band escalates through the
     // ratio walker (a deciding digit can sit below the fixed working scale).
-    let tie_walker = |base_guard_digits: u32| -> C::Storage {
-        C::round_to_storage_directed(base_guard_digits, SCALE, mode, &mut |guard_digits| {
-            let working_scale = SCALE + guard_digits;
-            let (sin_value, cos_value) =
-                C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
-            if cos_value == C::zero() {
-                panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
-            }
-            C::div(sin_value, cos_value, working_scale)
-        })
+    // `pole` is a plain call-local flag, the recompute closure's only way to
+    // report a pole it meets at a deeper guard (it owes the walker a value).
+    let mut pole = false;
+    let mut tie_walker = |base_guard_digits: u32| -> Option<C::Storage> {
+        let walked =
+            C::round_to_storage_directed(base_guard_digits, SCALE, mode, &mut |guard_digits| {
+                let working_scale = SCALE + guard_digits;
+                let (sin_value, cos_value) =
+                    C::sin_cos_fixed::<SCALE>(C::to_work_scaled(raw, guard_digits), working_scale);
+                if cos_value == C::zero() {
+                    pole = true;
+                    return C::zero();
+                }
+                C::div(sin_value, cos_value, working_scale)
+            });
+        if pole {
+            return None;
+        }
+        walked
     };
     if !NEAR_POLE {
         let tan_value = C::div(sin_base, cos_base, base_working_scale);
-        if let Some(rounded) =
+        if let Some(verdict) =
             crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
                 C::Storage,
                 C::W,
             >(tan_value, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
+            .settled()
         {
-            return rounded;
+            return verdict;
         }
         return tie_walker(GUARD);
     }
     let probe = C::div(sin_base, cos_base, base_working_scale);
     let extra = super::near_pole_tan::tan_extra_digits(C::bit_length(probe), base_working_scale);
     if extra == 0 {
-        if let Some(rounded) =
+        if let Some(verdict) =
             crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
                 C::Storage,
                 C::W,
             >(probe, base_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
+            .settled()
         {
-            return rounded;
+            return verdict;
         }
         return tie_walker(GUARD);
     }
@@ -166,13 +180,14 @@ where
     let working_value = C::to_work_scaled(raw, GUARD + extra);
     let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(working_value, lifted_working_scale);
     let tan_value = C::div(sin_w, cos_w, lifted_working_scale);
-    if let Some(rounded) =
+    if let Some(verdict) =
         crate::algos::support::wide_trig_core::round_to_storage_clear_of_tie_g::<
             C::Storage,
             C::W,
         >(tan_value, lifted_working_scale, SCALE, mode, C::storage_max(), C::storage_min())
+        .settled()
     {
-        return rounded;
+        return verdict;
     }
     tie_walker(GUARD + extra)
 }

@@ -33,7 +33,9 @@
 //! by `policy::trig::sinh_cosh_dispatch`.
 
 use crate::algos::exp::exp_generic as eg;
-use crate::algos::support::wide_trig_core::{round_to_storage_clear_of_tie_g, WideTrigCore};
+use crate::algos::support::wide_trig_core::{
+    round_to_storage_clear_of_tie_g, ClearShot, WideTrigCore,
+};
 use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
@@ -60,9 +62,9 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn sinh_cosh_exp_reciprocal<C: WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-    sinh_escape: fn(C::Storage, RoundingMode) -> C::Storage,
-    cosh_escape: fn(C::Storage, RoundingMode) -> C::Storage,
-) -> (C::Storage, C::Storage)
+    sinh_escape: fn(C::Storage, RoundingMode) -> Option<C::Storage>,
+    cosh_escape: fn(C::Storage, RoundingMode) -> Option<C::Storage>,
+) -> Option<(C::Storage, C::Storage)>
 where
     <C::Wagm as BigInt>::Scratch: ComputeLimbs,
 {
@@ -89,8 +91,9 @@ where
         C::storage_max(),
         C::storage_min(),
     ) {
-        Some(narrowed) => narrowed,
-        None => sinh_escape(raw, mode),
+        ClearShot::Decided(narrowed) => narrowed,
+        ClearShot::OutOfRange => return None,
+        ClearShot::Escalate => sinh_escape(raw, mode)?,
     };
     let cosh_bits = match round_to_storage_clear_of_tie_g::<C::Storage, C::Wagm>(
         cosh_value,
@@ -100,8 +103,9 @@ where
         C::storage_max(),
         C::storage_min(),
     ) {
-        Some(narrowed) => narrowed,
-        None => cosh_escape(raw, mode),
+        ClearShot::Decided(narrowed) => narrowed,
+        ClearShot::OutOfRange => return None,
+        ClearShot::Escalate => cosh_escape(raw, mode)?,
     };
-    (sinh_bits, cosh_bits)
+    Some((sinh_bits, cosh_bits))
 }

@@ -80,7 +80,7 @@ pub(crate) fn log1p_with_ln_g<St: BigInt + Copy, S: BigInt, const SCALE: u32>(
     storage_max: St,
     storage_min: St,
     mode: RoundingMode,
-) -> St
+) -> Option<St>
 where
     S::Scratch: ComputeLimbs,
 {
@@ -104,7 +104,7 @@ where
     // The same analytic sub-resolution adjust the artanh kernel applies:
     // this composition runs the Series `ln` core directly, which (unlike
     // the Tang path) does not carry `adjust_ln_near_one` of its own.
-    super::adjust_near_zero::<St, S, SCALE>(rounded, raw, mode)
+    Some(super::adjust_near_zero::<St, S, SCALE>(rounded?, raw, mode))
 }
 
 /// Tier-generic entry to [`log1p_with_ln_g`] — sources the work integer
@@ -117,7 +117,7 @@ where
 pub(crate) fn log1p_with_ln<C: wtc::WideTrigCore, const SCALE: u32>(
     raw: C::Storage,
     mode: RoundingMode,
-) -> C::Storage
+) -> Option<C::Storage>
 where
     <C::W as BigInt>::Scratch: ComputeLimbs,
 {
