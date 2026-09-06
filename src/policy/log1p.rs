@@ -139,11 +139,11 @@ pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
 /// Narrow (`N <= 2`) strict arm: compute at [`WZiv`] over `Int<2>`
 /// storage, then fit back to `Int<N>`.
 #[inline]
-fn narrow_strict<const N: usize, const SCALE: u32>(
+fn narrow_routed<const N: usize, const SCALE: u32>(
     raw: Int<N>,
     algo: Algorithm,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     let raw_narrow = raw.resize_to::<Int<2>>();
     let out = match algo {
         Algorithm::Artanh => log1p_artanh_g::<Int<2>, WZiv, SCALE>(
@@ -161,11 +161,8 @@ fn narrow_strict<const N: usize, const SCALE: u32>(
             mode,
         ),
     };
-    // The narrow kernels report the fit now; this strict arm re-raises it.
-    let out = out.unwrap_or_else(|| {
-        crate::support::diagnostics::overflow_panic_with_scale("log1p", SCALE)
-    });
-    super::narrow_checked::<N>(out, "log1p", SCALE)
+    // See the expm1 sibling: kernel verdict and storage fit compose.
+    super::narrow_fit::<N>(out?)
 }
 
 /// Wide strict arm at the tier `C` — the tier supplies the work integer
@@ -202,7 +199,7 @@ fn routed<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Option<Int<N>> {
     match N {
-        1 | 2 => Some(narrow_strict::<N, SCALE>(raw, algo, mode)),
+        1 | 2 => narrow_routed::<N, SCALE>(raw, algo, mode),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => wide_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -223,7 +220,7 @@ fn routed<const N: usize, const SCALE: u32>(
         48 => wide_strict::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => wide_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
-        _ => Some(narrow_strict::<N, SCALE>(raw, algo, mode)),
+        _ => narrow_routed::<N, SCALE>(raw, algo, mode),
     }
 }
 

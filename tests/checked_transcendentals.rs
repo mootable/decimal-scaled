@@ -389,6 +389,130 @@ fn bounded_methods_always_some() {
 
 // ── One wide tier ────────────────────────────────────────────────────
 
+
+// ── The overflow seam: both polarities, at every tier ────────────────
+//
+// Every disclosure removed from `checked_transcendentals.rs` claimed the
+// out-of-range seam was threaded at SOME tiers and not others. Removing
+// them asserts it is exact EVERYWHERE, so the claims are checked here at
+// D18 (narrow), D38 (the tier the gap actually lived at) and a wide tier.
+//
+// Both polarities are asserted deliberately. The NEGATIVE one is not
+// decoration: several `Option`s in this seam mean "this analytic path does
+// not apply, fall through" rather than "out of range", and three of them
+// are nested `Option<Option<_>>` where the two meanings live in one value.
+// Flattening one is a natural-looking edit that compiles — and the code
+// had already flattened `round_to_i128_clear_of_tie`'s, which WAS the D38
+// gap. A conflation returns `None` for an ordinary in-range input, so only
+// the fall-through assertions can catch it.
+
+/// Out-of-range results answer `None`, at the narrow tier.
+#[test]
+fn out_of_range_none_d18() {
+    // D18<6> is i64 storage, so it holds up to ~9.2e12. `exp(30)` is
+    // ~1.07e13 and out of range; `sinh`/`cosh` are HALF that, so they need
+    // a larger argument — sinh(30) is ~5.3e12 and comfortably representable.
+    let big = D18::<6>::try_from(30_i32).unwrap();
+    let bigger = D18::<6>::try_from(32_i32).unwrap();
+    assert_eq!(big.checked_exp(), None);
+    assert_eq!(big.checked_expm1(), None);
+    assert_eq!(bigger.checked_sinh(), None);
+    assert_eq!(bigger.checked_cosh(), None);
+    // ... and the argument that does NOT overflow returns a value.
+    assert_eq!(big.checked_sinh(), Some(big.sinh()));
+    assert_eq!(D18::<6>::try_from(50_i32).unwrap().checked_exp2(), None);
+    assert_eq!(D18::<6>::MAX.checked_to_degrees(), None);
+    for mode in MODES {
+        assert_eq!(big.checked_exp_with(mode), None);
+        assert_eq!(bigger.checked_sinh_with(mode), None);
+        assert_eq!(bigger.checked_cosh_with(mode), None);
+        assert_eq!(D18::<6>::MAX.checked_to_degrees_with(mode), None);
+    }
+}
+
+/// The tier the gap lived at: D38 answered `None` only for the
+/// logarithms and exponentials, and panicked for the hyperbolics and
+/// `to_degrees`. All of them answer now.
+#[test]
+fn out_of_range_none_d38() {
+    let big = d38(120);
+    assert_eq!(big.checked_exp(), None);
+    assert_eq!(big.checked_expm1(), None);
+    assert_eq!(big.checked_sinh(), None);
+    assert_eq!(big.checked_cosh(), None);
+    assert_eq!(d38(100).checked_exp2(), None);
+    assert_eq!(D38::<10>::MAX.checked_to_degrees(), None);
+    assert_eq!(d38(10).checked_powf(d38(30)), None);
+    for mode in MODES {
+        assert_eq!(big.checked_sinh_with(mode), None);
+        assert_eq!(big.checked_cosh_with(mode), None);
+        assert_eq!(big.checked_expm1_with(mode), None);
+        assert_eq!(D38::<10>::MAX.checked_to_degrees_with(mode), None);
+    }
+}
+
+/// The fall-through polarity: an in-range input that takes an analytic
+/// path whose `Option` means "does not apply" must return a VALUE. Each
+/// case below names the site whose `None` a conflation would leak.
+#[test]
+fn fall_through_paths_return_some_narrow() {
+    // `ln_pow2_exit`: None = "not an exact power of two, fall through".
+    let three = d38(3);
+    assert_eq!(three.checked_ln(), Some(three.ln()));
+    assert_eq!(d38(10).checked_ln(), Some(d38(10).ln()));
+    // `tanh_saturated`: None = "outside the saturation band".
+    let half = D38::<10>::ONE / d38(2);
+    assert_eq!(half.checked_tanh(), Some(half.tanh()));
+    // `exp2_exact_pin`: None = "not an exact power".
+    let one_and_half = D38::<10>::ONE + half;
+    assert_eq!(one_and_half.checked_exp2(), Some(one_and_half.exp2()));
+    // `hyper_tiny_pin`: None = "outside the tiny-argument band".
+    assert_eq!(d38(2).checked_sinh(), Some(d38(2).sinh()));
+    assert_eq!(d38(2).checked_cosh(), Some(d38(2).cosh()));
+    // Same three at D18.
+    let n3 = D18::<6>::try_from(3_i32).unwrap();
+    assert_eq!(n3.checked_ln(), Some(n3.ln()));
+    let nhalf = D18::<6>::ONE / D18::<6>::try_from(2_i32).unwrap();
+    assert_eq!(nhalf.checked_tanh(), Some(nhalf.tanh()));
+    assert_eq!(n3.checked_sinh(), Some(n3.sinh()));
+}
+
+/// The conflation sweep. Any `Option` in the seam that acquires the
+/// range verdict's meaning turns some ordinary input into `None`; this
+/// asserts a value for a spread of them across every mode, so a
+/// flattening anywhere in the chain shows up as a failure here rather
+/// than as a silent wrong answer in the field.
+#[test]
+fn in_range_sweep_matches_default_narrow() {
+    // Bounded and slow-growing: safe across the whole spread at D38<10>.
+    for raw in [1_i64, 2, 3, 5, 7, 10, 11, 16, 17, 32, 64, 100] {
+        let v = d38(raw);
+        for mode in MODES {
+            assert_eq!(v.checked_ln_with(mode), Some(v.ln_with(mode)), "ln {raw} {mode:?}");
+            assert_eq!(v.checked_log2_with(mode), Some(v.log2_with(mode)), "log2 {raw} {mode:?}");
+            assert_eq!(v.checked_log10_with(mode), Some(v.log10_with(mode)), "log10 {raw} {mode:?}");
+            assert_eq!(v.checked_tanh_with(mode), Some(v.tanh_with(mode)), "tanh {raw} {mode:?}");
+            assert_eq!(v.checked_atan_with(mode), Some(v.atan_with(mode)), "atan {raw} {mode:?}");
+            assert_eq!(
+                v.checked_to_radians_with(mode),
+                Some(v.to_radians_with(mode)),
+                "to_radians {raw} {mode:?}"
+            );
+        }
+    }
+    // `sinh`/`cosh` grow like e^|x|/2, so their in-range spread stops well
+    // short: D38<10> holds ~1e28 and sinh(64) is already ~3e27. Sweeping
+    // them to 100 asserts a value for an input that is genuinely out of
+    // range — a fault in the test, not the seam.
+    for raw in [1_i64, 2, 3, 5, 7, 10, 11, 16, 17, 32] {
+        let v = d38(raw);
+        for mode in MODES {
+            assert_eq!(v.checked_sinh_with(mode), Some(v.sinh_with(mode)), "sinh {raw} {mode:?}");
+            assert_eq!(v.checked_cosh_with(mode), Some(v.cosh_with(mode)), "cosh {raw} {mode:?}");
+        }
+    }
+}
+
 #[cfg(feature = "wide")]
 mod wide {
     use super::MODES;
@@ -458,14 +582,15 @@ mod wide {
         assert_eq!(d76(5).checked_log(D76::<30>::ONE), None);
     }
 
-    /// Documents the INTERIM wide-tier contract: out-of-range results
-    /// still panic in the checked form (the wide kernel seam is the
-    /// deferred piece — `research/checked_wide_shell_patch.md`). This
-    /// pin flips to a `None` assertion when the seam lands.
+    /// The seam has landed, so this pin is flipped: the wide checked form
+    /// ANSWERS where it used to panic. Its predecessor asserted the
+    /// interim contract (`d76_exp_overflow_still_panics_pending_seam`).
     #[test]
-    #[should_panic(expected = "result out of range")]
-    fn d76_exp_overflow_still_panics_pending_seam() {
-        let _ = d76(200).checked_exp();
+    fn d76_exp_overflow_none() {
+        assert_eq!(d76(200).checked_exp(), None);
+        for mode in MODES {
+            assert_eq!(d76(200).checked_exp_with(mode), None);
+        }
     }
 
     #[test]
