@@ -1075,7 +1075,10 @@ mod borrow_d57 {
             super::forward::Algorithm::Schoolbook => {
                 trig::trig_schoolbook::atan_schoolbook::<wide_trig_d57::Core, SCALE>(widened.0, mode)
             }
-        };
+        }
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE)
+        });
         narrow::<SCALE>(raw_wide, "atan")
     }
 
@@ -1085,6 +1088,9 @@ mod borrow_d57 {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::inverse_tang_3limb_s18_22::asin::<SCALE>(widened.0, mode)
+                .unwrap_or_else(|| {
+                    crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE)
+                })
         } else {
             widened.asin_with(mode).0
         };
@@ -1097,6 +1103,9 @@ mod borrow_d57 {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::inverse_tang_3limb_s18_22::acos::<SCALE>(widened.0, mode)
+                .unwrap_or_else(|| {
+                    crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE)
+                })
         } else {
             widened.acos_with(mode).0
         };
@@ -1114,6 +1123,9 @@ mod borrow_d57 {
         let x_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(x_raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::inverse_tang_3limb_s18_22::atan2::<SCALE>(y_wide.0, x_wide.0, mode)
+                .unwrap_or_else(|| {
+                    crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE)
+                })
         } else {
             y_wide.atan2_with(x_wide, mode).0
         };
@@ -1779,7 +1791,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
                 18..=22 => trig::inverse_tang_3limb_s18_22::asin::<SCALE>(self.0, mode),
-                _ => return Self(inverse_rung::asin::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return inverse_rung::asin::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1790,7 +1802,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
                 18..=22 => trig::inverse_tang_3limb_s18_22::acos::<SCALE>(self.0, mode),
-                _ => return Self(inverse_rung::acos::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return inverse_rung::acos::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1803,7 +1815,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
                 18..=22 => {
                     trig::inverse_tang_3limb_s18_22::atan2::<SCALE>(self.0, other.0, mode)
                 }
-                _ => return Self(inverse_rung::atan2::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode)),
+                _ => return inverse_rung::atan2::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode).map(Self),
             },
             #[allow(dead_code)]
             inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode),
@@ -1816,7 +1828,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::sinh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::sinh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1827,7 +1839,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::cosh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::cosh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1838,7 +1850,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<3>, SCALE> {
         match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 18..=22 if hyper_band_in_range::<3, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::tanh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::tanh::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
@@ -1868,7 +1880,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
         match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 50..=60 if hyper_band_in_range::<6, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode)),
+                _ => return crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode),
@@ -1879,7 +1891,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
         match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 50..=60 if hyper_band_in_range::<6, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode)),
+                _ => return crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode),
@@ -1890,7 +1902,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<6>, SCALE> {
         match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 50..=60 if hyper_band_in_range::<6, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode)),
+                _ => return crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode),
@@ -1954,7 +1966,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(hyper_rung::sinh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::sinh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1965,7 +1977,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(hyper_rung::cosh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::cosh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -1976,7 +1988,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<8>, SCALE> {
         match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 70..=82 if hyper_band_in_range::<8, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 128, true>(self.0, mode),
-                _ => return Self(hyper_rung::tanh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::tanh::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
@@ -2049,7 +2061,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::sinh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::sinh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2060,7 +2072,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::cosh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::cosh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2071,7 +2083,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
         match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
                 140..=160 if hyper_band_in_range::<16, SCALE>(&self.0) => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 128, false>(self.0, mode),
-                _ => return Self(hyper_rung::tanh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
+                _ => return hyper_rung::tanh::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode).map(Self),
             },
             #[allow(dead_code)]
             hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
@@ -2197,9 +2209,12 @@ where
         sin_cos::Algorithm::SharedTaylor => trig::sincos_joint::sin_cos_shared_taylor::<C, SCALE>(
             raw,
             mode,
-            sin_dispatch::<N, SCALE>,
-            cos_dispatch::<N, SCALE>,
-        ),
+            checked_sin_dispatch::<N, SCALE>,
+            checked_cos_dispatch::<N, SCALE>,
+        )
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("sin_cos", SCALE)
+        }),
         sin_cos::Algorithm::Separate => (
             sin_dispatch::<N, SCALE>(raw, mode),
             cos_dispatch::<N, SCALE>(raw, mode),
@@ -2230,9 +2245,12 @@ where
             trig::hyper_joint::sinh_cosh_exp_reciprocal::<C, SCALE>(
                 raw,
                 mode,
-                sinh_dispatch::<N, SCALE>,
-                cosh_dispatch::<N, SCALE>,
+                checked_sinh_dispatch::<N, SCALE>,
+                checked_cosh_dispatch::<N, SCALE>,
             )
+            .unwrap_or_else(|| {
+                crate::support::diagnostics::overflow_panic_with_scale("sinh_cosh", SCALE)
+            })
         }
         sinh_cosh::Algorithm::Separate => (
             sinh_dispatch::<N, SCALE>(raw, mode),

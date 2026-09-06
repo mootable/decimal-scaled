@@ -185,14 +185,14 @@ where
     if single_shot.abs() >= Int::<N>::MAX - Int::<N>::ONE {
         return Some(single_shot);
     }
-    Some(log_ratio_finish::<N, Wk, SCALE>(
+    log_ratio_finish::<N, Wk, SCALE>(
         raw,
         base_raw,
         mode,
         COMPOSITION_GUARD,
         probe,
         ratio_at,
-    ))
+    )
 }
 
 // ── The conditioned composition ─────────────────────────────────────────
@@ -391,7 +391,7 @@ pub(crate) fn log_ln_divide_conditioned<const N: usize, Wk: BigInt, const SCALE:
     mode: RoundingMode,
     guard: u32,
     ln_at: impl Fn(Wk, u32) -> Wk,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -623,7 +623,7 @@ pub(crate) fn conditioned_finish<const N: usize, Wk: BigInt, const SCALE: u32>(
     guard: u32,
     ln_at: &impl Fn(Wk, u32) -> Wk,
     probe_ratio: Wk,
-) -> Int<N>
+) -> Option<Int<N>>
 where
     <Wk as BigInt>::Scratch: ComputeLimbs,
 {
@@ -710,7 +710,7 @@ where
         base_working_scale,
         mode,
     ) {
-        return pinned;
+        return Some(pinned);
     }
     // Directed narrowing through the shared Ziv escalation. The walker
     // always probes `guard` first, and that probe is `probe_ratio` (pure
@@ -893,14 +893,14 @@ where
         if bump { result_magnitude + Wk::ONE } else { result_magnitude }
     };
     let signed = if is_negative { -magnitude } else { magnitude };
-    Some(round_to_storage_with_g::<Int<N>, Wk>(
+    round_to_storage_with_g::<Int<N>, Wk>(
         signed,
         scale,
         scale,
         mode,
         Int::<N>::MAX,
         Int::<N>::MIN,
-    ))
+    )
 }
 
 /// `base^exponent` in `Wk`, `None` when the result could exceed the bit

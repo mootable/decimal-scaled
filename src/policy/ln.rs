@@ -326,15 +326,23 @@ fn tang_narrow<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
     let raw4 = raw.resize_to::<Int<4>>();
     // The exact-power-of-two class (`m == 1`, `ln x = k·ln 2`) skips the lift
     // and the reduction loop; everything after them is the kernel's own tail.
-    let wide = ln_pow2_exit::<Int<4>, Int<12>, SCALE, 8>(raw4, Int::<4>::MAX, Int::<4>::MIN, mode)
-        .unwrap_or_else(|| {
-            ln_tang_g::<Int<4>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
-                raw4,
-                Int::<4>::MAX,
-                Int::<4>::MIN,
-                mode,
-            )
-        });
+    // Two different questions, so not one `unwrap_or_else`: the pow2 exit's
+    // `None` means "not an exact power of two, fall through", while the
+    // kernel's means "out of range". Only the second is this arm's verdict.
+    let wide = match ln_pow2_exit::<Int<4>, Int<12>, SCALE, 8>(
+        raw4,
+        Int::<4>::MAX,
+        Int::<4>::MIN,
+        mode,
+    ) {
+        Some(exact) => exact,
+        None => ln_tang_g::<Int<4>, Int<12>, Int<12>, SCALE, 8, 100, true, false>(
+            raw4,
+            Int::<4>::MAX,
+            Int::<4>::MIN,
+            mode,
+        )?,
+    };
     let out = wide.resize_to::<Int<N>>();
     if out.resize_to::<Int<4>>() != wide {
         return None;

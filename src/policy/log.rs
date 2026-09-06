@@ -349,7 +349,7 @@ fn conditioned_narrow<const N: usize, const SCALE: u32>(
     if single_shot.abs() >= Int::<N>::MAX - Int::<N>::ONE {
         return Some(single_shot);
     }
-    Some(conditioned_finish::<N, WZiv, SCALE>(raw, braw, mode, guard, &ln_at, probe))
+    conditioned_finish::<N, WZiv, SCALE>(raw, braw, mode, guard, &ln_at, probe)
 }
 
 #[inline]

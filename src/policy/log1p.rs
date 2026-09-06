@@ -115,6 +115,19 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     raw: Int<N>,
     mode: RoundingMode,
 ) -> Int<N> {
+    checked_dispatch::<N, SCALE>(raw, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("log1p", SCALE)
+    })
+}
+
+/// The `checked` primitive under [`dispatch`]: same routing, the
+/// out-of-range verdict propagating instead of panicking.
+#[inline]
+#[must_use]
+pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    mode: RoundingMode,
+) -> Option<Int<N>> {
     routed::<N, SCALE>(raw, resolve::<N, SCALE>(&raw), mode)
 }
 
@@ -187,9 +200,9 @@ fn routed<const N: usize, const SCALE: u32>(
     raw: Int<N>,
     algo: Algorithm,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Option<Int<N>> {
     match N {
-        1 | 2 => narrow_strict::<N, SCALE>(raw, algo, mode),
+        1 | 2 => Some(narrow_strict::<N, SCALE>(raw, algo, mode)),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => wide_strict::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -210,7 +223,7 @@ fn routed<const N: usize, const SCALE: u32>(
         48 => wide_strict::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => wide_strict::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), algo, mode).map(|value| value.resize_to::<Int<N>>()),
-        _ => narrow_strict::<N, SCALE>(raw, algo, mode),
+        _ => Some(narrow_strict::<N, SCALE>(raw, algo, mode)),
     }
 }
 
