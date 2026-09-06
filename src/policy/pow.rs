@@ -168,13 +168,12 @@ fn pinned_exp_with_ln_routed<const N: usize, const SCALE: u32>(
 
 /// The `checked` primitive for `checked_powf[_with]`.
 ///
-/// Narrow tiers (`N == 1 | 2`) run the seamed `powf_series_2limb`
-/// kernel: its out-of-range `None` (and the `Int<2> -> Int<1>` narrow
-/// fit) propagate exactly. The wide arms hop to the tier's inherent
-/// `powf_with` shell — the SAME path the default wide `powf`
-/// surface takes (the shell delegates to [`dispatch`], and bit-identity
-/// with the default form is the contract) — so a wide out-of-range
-/// result still panics inside that shell.
+/// Runs the matcher itself and calls the routed kernels, so every tier's
+/// out-of-range verdict propagates. It used to hop to the tier's inherent
+/// `powf_with` shell instead, which reached `select` only by going out
+/// through the public surface and back in — and, because that shell
+/// panicked, made a wide out-of-range result a crash rather than a `None`.
+/// [`dispatch`] applies the panic once, in the wrapper.
 #[inline]
 #[must_use]
 pub(crate) fn checked_dispatch<const N: usize, const SCALE: u32>(

@@ -359,9 +359,9 @@ fn exp_wide_narrow_strict_raw(raw: i128, scale: u32, mode: RoundingMode) -> Opti
 /// (e.g. `exp(100)` at D38<35> is ~2.7e43·10^35, far beyond `i128::MAX`),
 /// DISTINCT from the working-width (`exp_fixed` internal `2·w_ext`)
 /// overflow the wider `WNarrow` work integer fixes. The caller turns the
-/// `None` into the same overflow panic / saturation the `Fixed` path's
-/// `round_to_i128_with` did, so `exp` still panics on an
-/// unrepresentable result rather than silently returning a wrapped value.
+/// `None` into whichever answer its surface owes: the strict form's
+/// overflow panic, applied once in the policy `dispatch` wrapper, or the
+/// `checked_` form's `None` — never a silently wrapped value.
 #[inline]
 fn narrow_round_mag(
     mag: WNarrow,

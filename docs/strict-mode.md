@@ -73,9 +73,8 @@ assert_eq!(two.checked_sqrt(), Some(two.sqrt())); // in range
 - **Domain errors** (`asin`, `acos`, `acosh`, `ln`, `log`, `log2`,
   `log10`, `atanh`): `None` on the out-of-domain inputs, at every tier.
 - **Out-of-range results** (`exp`, `ln`, `hypot`, …): `None` when the
-  correctly-rounded result does not fit storage — exact on `D18` / `D38`;
-  on the wide tiers an out-of-range result still panics where the kernel
-  seam is not yet threaded (each method's API docs state which applies).
+  correctly-rounded result does not fit storage, at every tier — `D18`,
+  `D38` and the wide tiers alike.
 - **Total methods** (`sqrt`, `cbrt`, `sin`, `cos`, `atan`, `atan2`,
   `tanh`, `asinh`, `to_radians`, …) cannot fail and always return `Some`.
 
