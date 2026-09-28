@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "decimal-scaled"
 version = "0.5.1"
 edition = "2024"
@@ -227,7 +227,7 @@ dashu-float = "0.6"
 # results in the comparison benches.
 dashu-int = { version = "0.6", default-features = false, features = ["std"] }
 decimal-rs = "0.2"
-scientific = "0.5"
+scientific = "0.6"
 # Chart generation for docs/figures/library_comparison/*.png — pure
 # Rust, no Python dep. Driven by examples/chart_gen.rs.
 plotters = { version = "0.3", default-features = false, features = ["bitmap_backend", "bitmap_encoder", "line_series", "ttf"] }
