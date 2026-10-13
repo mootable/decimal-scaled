@@ -123,7 +123,7 @@ jobs:
           echo "--- staged ---"; ls -1 staged/deps/
 
       - name: Upload compiled bench exes
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bbc-compiled
           path: bench-compare/staged/
@@ -238,7 +238,7 @@ jobs:
 
       - name: Upload cell criterion subtree
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bbc-${{ matrix.width }}-s${{ matrix.scale }}
           path: target/criterion/
@@ -366,7 +366,7 @@ jobs:
 
       - name: Upload single aggregate artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bbc-aggregate
           path: bench-compare/aggregate/
