@@ -212,7 +212,7 @@ jobs:
         run: sudo rm -f /etc/apt/sources.list.d/*microsoft* /etc/apt/sources.list.d/*azure* 2>/dev/null || true; sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Download compiled bench exes
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: bbc-compiled
           path: bbc-compiled
@@ -273,7 +273,7 @@ jobs:
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
 
       - name: Download every (width, scale) bench cell
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           # No `name` -> every artifact this run uploaded, each into a subdir
           # named after the artifact (bbc-D18-s0/, bbc-D307-s153/, ...).
